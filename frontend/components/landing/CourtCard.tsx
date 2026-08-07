@@ -25,6 +25,7 @@ type CourtCardProps = {
 };
 
 export default function CourtCard({
+  id,
   court_number,
   name,
   description,
@@ -245,7 +246,7 @@ export default function CourtCard({
             asChild
           >
             <Link
-              href="/reservation"
+               href={`/reservation?courtId=${id}`}
               className="group"
             >
               Reserve

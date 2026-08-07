@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import Container from "@/components/common/Container";
 
@@ -11,7 +11,10 @@ import GuestForm from "./GuestForm";
 import BookingSummary from "./BookingSummary";
 import { useCreateReservation } from "@/hooks/useCreateReservation";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useCourtSchedules } from "@/hooks/useCourtSchedules";
 import { formatTime } from "@/utils/time";
 const steps = [
@@ -46,9 +49,22 @@ export default function ReservationSteps() {
   const { data: courtSchedules = [] } =
   useCourtSchedules(selectedCourt);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+const courtId = searchParams.get("courtId");
+
   const createReservation =
   useCreateReservation();
-    const nextStep = () => {
+
+useEffect(() => {
+  if (!courtId) return;
+
+  setSelectedCourt(Number(courtId));
+
+  setCurrentStep(1);
+}, [courtId]);
+
+const nextStep = () => {
     if (currentStep === 0 && !selectedCourt) {
          toast.error("Please select a court.");
         return;
