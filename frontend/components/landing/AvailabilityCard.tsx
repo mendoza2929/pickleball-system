@@ -218,35 +218,7 @@ export default function AvailabilityCard({
 
       </div>
 
-      {/* Button */}
-
-      <Button
-        className="
-        hero-btn-primary
-        mt-8
-        w-full
-        "
-        asChild
-      >
-        <Link
-          href="/reservation"
-          className="group"
-        >
-          Reserve Court
-
-          <ArrowRight
-            className="
-            ml-2
-            h-5
-            w-5
-            transition-transform
-            duration-300
-            group-hover:translate-x-1
-            "
-          />
-
-        </Link>
-      </Button>
+    
     </motion.div>
   );
 }

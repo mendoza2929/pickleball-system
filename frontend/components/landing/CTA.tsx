@@ -212,66 +212,7 @@ export default function CTA() {
 
             </motion.div>
 
-            {/* Buttons */}
-
-            <motion.div
-              initial={{
-                opacity: 0,
-                y: 20,
-              }}
-              whileInView={{
-                opacity: 1,
-                y: 0,
-              }}
-              viewport={{
-                once: true,
-              }}
-              transition={{
-                delay: .55,
-              }}
-              className="
-                mt-14
-                flex
-                flex-wrap
-                gap-5
-              "
-            >
-
-              <Button
-                className="
-                  hero-btn-primary
-                  h-14
-                  px-8
-                "
-                asChild
-              >
-                <Link href="/reservation">
-
-                  Reserve Court
-
-                  <ArrowRight className="ml-2 h-5 w-5" />
-
-                </Link>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="
-                  hero-btn-secondary
-                  h-14
-                  px-8
-                "
-                asChild
-              >
-                <Link href="/courts">
-
-                  Browse Courts
-
-                </Link>
-              </Button>
-
-            </motion.div>
-
+          
           </div>
 
         </motion.div>

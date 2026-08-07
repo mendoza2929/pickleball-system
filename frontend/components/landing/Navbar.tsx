@@ -43,26 +43,34 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    const sections = document.querySelectorAll("section[id]");
+useEffect(() => {
+  const sections = document.querySelectorAll("section[id]");
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.id);
-          }
-        });
-      },
-      {
-        threshold: 0.55,
-      }
-    );
+  console.log(sections);
 
-    sections.forEach((section) => observer.observe(section));
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        console.log(
+          entry.target.id,
+          entry.isIntersecting,
+          entry.intersectionRatio
+        );
 
-    return () => observer.disconnect();
-  }, []);
+        if (entry.isIntersecting) {
+          setActiveSection(entry.target.id);
+        }
+      });
+    },
+    {
+      threshold: 0.2,
+    }
+  );
+
+  sections.forEach((section) => observer.observe(section));
+
+  return () => observer.disconnect();
+}, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -167,28 +175,6 @@ export default function Navbar() {
 
               {/* Desktop CTA */}
 
-              <Link
-                href="#reserve"
-                className="
-                  hidden
-                  xl:inline-flex
-                  items-center
-                  justify-center
-                  rounded-full
-                  bg-lime-400
-                  px-7
-                  py-3
-                  font-semibold
-                  text-slate-950
-                  transition-all
-                  duration-300
-                  hover:-translate-y-1
-                  hover:bg-lime-300
-                  hover:shadow-[0_15px_40px_rgba(132,255,0,.35)]
-                "
-              >
-                Reserve Now
-              </Link>
 
               {/* Mobile */}
 

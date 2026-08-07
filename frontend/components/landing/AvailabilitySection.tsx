@@ -106,23 +106,7 @@ export default function AvailabilitySection() {
               enjoy a seamless booking experience.
             </p>
 
-            <Button
-              className="
-              hero-btn-primary
-              mt-10
-              "
-              asChild
-            >
-              <Link href="/reservation">
-
-                Reserve Now
-
-                <ArrowRight className="ml-2 h-5 w-5" />
-
-              </Link>
-
-            </Button>
-
+         
             {/* Quick Stats */}
 
             <div

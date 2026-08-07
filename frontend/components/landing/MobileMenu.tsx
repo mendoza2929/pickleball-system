@@ -1,6 +1,5 @@
 "use client";
-
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 
 import { AnimatePresence, motion } from "framer-motion";
@@ -32,13 +31,34 @@ export default function MobileMenu({
   onOpenChange,
   activeSection,
 }: MobileMenuProps) {
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
+  const scrollPosition = useRef(0);
+useEffect(() => {
+  if (open) {
+    // Save current scroll position
+    scrollPosition.current = window.scrollY;
 
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
+    // Prevent page scrolling
+    document.body.style.overflow = "hidden";
+
+    // Show Hero behind the menu
+    window.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
+  } else {
+    document.body.style.overflow = "";
+
+    // Restore previous position
+    window.scrollTo({
+      top: scrollPosition.current,
+      behavior: "auto",
+    });
+  }
+
+  return () => {
+    document.body.style.overflow = "";
+  };
+}, [open]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -52,7 +72,28 @@ export default function MobileMenu({
     return () =>
       window.removeEventListener("keydown", handleEscape);
   }, [onOpenChange]);
+const handleNavigate = (href: string) => {
+  onOpenChange(false);
 
+  setTimeout(() => {
+    const id = href.replace("#", "");
+    const section = document.getElementById(id);
+
+    if (!section) return;
+
+    const offset = 80; // navbar height
+
+    const top =
+      section.getBoundingClientRect().top +
+      window.pageYOffset -
+      offset;
+
+    window.scrollTo({
+      top,
+      behavior: "smooth",
+    });
+  }, 350); // wait for menu animation
+};
   return (
     <>
       {/* Hamburger */}
@@ -210,7 +251,7 @@ export default function MobileMenu({
 
                         <Link
                           href={item.href}
-                          onClick={() => onOpenChange(false)}
+                          onClick={() => handleNavigate(item.href)}
                           className={`
                             flex
                             items-center
@@ -293,30 +334,28 @@ export default function MobileMenu({
 
                 </div>
 
-                <Link
-                  href="#reserve"
-                  onClick={() => onOpenChange(false)}
-                  className="
-                    flex
-                    h-16
-                    items-center
-                    justify-center
-                    rounded-full
-                    bg-lime-400
-                    font-semibold
-                    text-slate-950
-                    transition-all
-                    duration-300
-                    hover:scale-[1.02]
-                    hover:bg-lime-300
-                  "
-                >
+             <Link
+                href="/reservation"
+                onClick={() => onOpenChange(false)}
+                className="
+                  flex
+                  h-16
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-lime-400
+                  font-semibold
+                  text-slate-950
+                  transition-all
+                  duration-300
+                  hover:scale-[1.02]
+                  hover:bg-lime-300
+                "
+              >
+                Reserve Court
 
-                  Reserve Court
-
-                  <ArrowRight className="ml-2 h-5 w-5" />
-
-                </Link>
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
 
               </div>
 

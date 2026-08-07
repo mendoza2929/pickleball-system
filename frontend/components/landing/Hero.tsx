@@ -124,123 +124,7 @@ export default function Hero() {
   ultimate pickleball experience with RVS Pickleball Club.
 </motion.p>
 
-            {/* Buttons */}
-<div
-  className="
-    mt-10
-    flex
-    flex-wrap
-    justify-center
-    lg:justify-start
-    gap-4
-  "
->
-
-  {/* Primary Button */}
-
-  <motion.div
-    initial={{
-      opacity: 0,
-      y: 40,
-      scale: 0.9,
-    }}
-    animate={{
-      opacity: 1,
-      y: 0,
-      scale: 1,
-    }}
-    transition={{
-      duration: 0.7,
-      delay: 0.55,
-      ease: "easeOut",
-    }}
-    whileHover={{
-      scale: 1.05,
-      y: -3,
-    }}
-    whileTap={{
-      scale: 0.96,
-    }}
-  >
-    <Button
-      className="hero-btn-primary"
-      asChild
-    >
-      <Link
-        href="/reservation"
-        className="group"
-      >
-        Reserve Now
-
-        <ArrowRight
-          className="
-            ml-2
-            h-5
-            w-5
-            transition-transform
-            duration-300
-            group-hover:translate-x-1
-          "
-        />
-      </Link>
-    </Button>
-  </motion.div>
-
-  {/* Secondary Button */}
-
-  <motion.div
-    initial={{
-      opacity: 0,
-      y: 40,
-      scale: 0.9,
-    }}
-    animate={{
-      opacity: 1,
-      y: 0,
-      scale: 1,
-    }}
-    transition={{
-      duration: 0.7,
-      delay: 0.7,
-      ease: "easeOut",
-    }}
-    whileHover={{
-      scale: 1.05,
-      y: -3,
-    }}
-    whileTap={{
-      scale: 0.96,
-    }}
-  >
-    <Button
-      variant="outline"
-      className="hero-btn-secondary"
-      asChild
-    >
-      <Link
-        href="/courts"
-        className="group"
-      >
-        Browse Courts
-
-        <ArrowRight
-          className="
-            ml-2
-            h-5
-            w-5
-            opacity-0
-            -translate-x-2
-            transition-all
-            duration-300
-            group-hover:opacity-100
-            group-hover:translate-x-0
-          "
-        />
-      </Link>
-    </Button>
-  </motion.div>
-
-</div>
+      
 
 {/* Feature Chips */}
 
@@ -513,8 +397,14 @@ export default function Hero() {
       mt-6
     "
   >
+    <Link
+        href="/reservation"
+        className="group"
+      >
     Search Availability
-  </Button>
+     </Link>
+    </Button>
+ 
 </motion.div>
 
             </motion.div>
