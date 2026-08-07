@@ -1,6 +1,5 @@
 export const PAYMENT_STATUS = {
-    PENDING: "Pending",
-    PAID: "Paid",
-    FAILED: "Failed",
-    REFUNDED: "Refunded",
+  UNPAID: "Unpaid",
+  PARTIAL: "Partial",
+  PAID: "Paid",
 } as const;

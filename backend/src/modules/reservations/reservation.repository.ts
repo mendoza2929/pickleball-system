@@ -129,7 +129,7 @@ async createReservation(data: {
 
       data.guest_name ?? null,
       data.guest_email ?? null,
-      data.guest_phone ?? null,
+    data.guest_phone ?? null,
 
       data.court_id,
 
@@ -310,9 +310,7 @@ async createReservation(data: {
     );
 
     if (!rows.length) {
-      throw new Error("Reservation not found.");(
-        "Reservation not found."
-      );
+      throw new Error("Reservation not found.");
     }
 
     return rows[0];

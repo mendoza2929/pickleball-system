@@ -222,7 +222,7 @@ export class ReservationService {
             RESERVATION_STATUS.PENDING,
 
         payment_status:
-            PAYMENT_STATUS.PENDING,
+            PAYMENT_STATUS.UNPAID,
     });
 
     }
