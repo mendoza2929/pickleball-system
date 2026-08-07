@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Container from "@/components/common/Container";
 
@@ -46,6 +46,7 @@ export default function ReservationSteps() {
     guest_phone: "",
     remarks: "",
   });
+  const stepContainerRef = useRef<HTMLDivElement>(null);
   const { data: courtSchedules = [] } =
   useCourtSchedules(selectedCourt);
   const router = useRouter();
@@ -63,6 +64,15 @@ useEffect(() => {
 
   setCurrentStep(1);
 }, [courtId]);
+
+const scrollToStep = () => {
+  setTimeout(() => {
+    stepContainerRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, 100);
+};
 
 const nextStep = () => {
     if (currentStep === 0 && !selectedCourt) {
@@ -92,14 +102,28 @@ const nextStep = () => {
     }
 
 
-    setCurrentStep((prev) =>
-        Math.min(prev + 1, steps.length - 1)
-    );
+        setCurrentStep((prev) => {
+        const next = Math.min(prev + 1, steps.length - 1);
+
+        requestAnimationFrame(() => {
+          scrollToStep();
+        });
+
+        return next;
+      });
     };
 
   const previousStep = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
-  };
+  setCurrentStep((prev) => {
+    const next = Math.max(prev - 1, 0);
+
+    requestAnimationFrame(() => {
+      scrollToStep();
+    });
+
+    return next;
+  });
+};
 function formatLocalDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -162,7 +186,8 @@ const submitReservation = async () => {
       <Container>
         {/* Step Indicator */}
 
-        <div className="mx-auto mb-16 flex max-w-5xl items-center justify-between">
+        <div ref={stepContainerRef}
+  className="mx-auto mb-16 flex max-w-5xl items-center justify-between">
 
           {steps.map((step, index) => {
             const active = index <= currentStep;
