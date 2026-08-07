@@ -8,51 +8,51 @@ import TestimonialCard from "./TestimonialCard";
 const testimonials = [
   {
     image: "/images/players/player1.jpg",
-    name: "John Dela Cruz",
+    name: "John Angelo torres",
     role: "Advanced Player",
     rating: 5,
     review:
-      "The reservation system is incredibly smooth and the courts are always in excellent condition. Definitely the best pickleball club I've played at.",
+      "Maganda po yung court, nag kasya kame 5v5, thank you po satisfied kame.",
   },
   {
     image: "/images/players/player2.jpg",
-    name: "Maria Santos",
+    name: "Marlon Carpio",
     role: "Intermediate Player",
     rating: 5,
     review:
-      "I love how easy it is to reserve a court online. The facilities are clean, modern, and the staff is very accommodating.",
+      "First time ko po mag pickle ball, buti mabait si kuya nag babantay tinuruan ako mag billiard .",
   },
   {
     image: "/images/players/player3.jpg",
-    name: "James Reyes",
+    name: "Edward salcedo",
     role: "Tournament Player",
-    rating: 5,
+    rating: 3,
     review:
-      "Weekly tournaments are well organized and the competition is amazing. Looking forward to every event at RVS Pickleball Club.",
+      "3 star lang, matagal kame nag hintay, 8am binook name, 3 hours kame nag wait, (3am kame pumunta).",
   },
   {
     image: "/images/players/player4.jpg",
-    name: "Angela Cruz",
+    name: "Mario castañeda",
     role: "Beginner",
-    rating: 5,
+    rating: 1,
     review:
-      "Even as a beginner, I felt welcomed. Booking is simple and the environment is perfect for learning and improving.",
+      "Wag na kayo pumunta dito guys, masyadong mainet, yung electric fan naka tutok lang sa matabang taga bantay.",
   },
   {
     image: "/images/players/player5.jpg",
-    name: "Michael Tan",
+    name: "Clyde jumlaie",
     role: "Professional Player",
     rating: 5,
     review:
-      "Premium courts, excellent lighting, and a fantastic online booking experience. Highly recommended for serious players.",
+      "Thank you po coach reuel, nag enjoy po kame ng family ko punta ka daw dito sa bahay minsan sabi ni mama .",
   },
   {
     image: "/images/players/player1.jpg",
-    name: "Sophia Lim",
+    name: "Gefferson Omamalin",
     role: "Weekend Player",
-    rating: 5,
+    rating: 4,
     review:
-      "Our group books every weekend. The live availability feature makes planning so much easier.",
+      "4star po, kaso may nan ti trip sa parking lot, gas gas po motor ko pag uwe - .",
   },
 ];
 
