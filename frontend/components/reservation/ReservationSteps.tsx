@@ -47,6 +47,7 @@ export default function ReservationSteps() {
     remarks: "",
   });
   const stepContainerRef = useRef<HTMLDivElement>(null);
+  const stepContentRef = useRef<HTMLDivElement>(null);
   const { data: courtSchedules = [] } =
   useCourtSchedules(selectedCourt);
   const router = useRouter();
@@ -56,74 +57,83 @@ const courtId = searchParams.get("courtId");
 
   const createReservation =
   useCreateReservation();
-
 useEffect(() => {
   if (!courtId) return;
 
-  setSelectedCourt(Number(courtId));
+  const id = Number(courtId);
 
-  setCurrentStep(1);
+  setSelectedCourt((prev) =>
+    prev === id ? prev : id
+  );
+
+  setCurrentStep((prev) =>
+    prev === 1 ? prev : 1
+  );
 }, [courtId]);
 
+useEffect(() => {
+  const id = requestAnimationFrame(() => {
+    scrollToStep();
+  });
+
+  return () => cancelAnimationFrame(id);
+}, [currentStep]);
+
+
+
 const scrollToStep = () => {
-  setTimeout(() => {
-    stepContainerRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, 100);
+  if (!stepContentRef.current) return;
+
+  const navbarHeight = 90;
+
+  const y =
+    stepContentRef.current.getBoundingClientRect().top +
+    window.scrollY -
+    navbarHeight;
+
+  window.scrollTo({
+    top: y,
+    behavior: "smooth",
+  });
 };
 
 const nextStep = () => {
-    if (currentStep === 0 && !selectedCourt) {
-         toast.error("Please select a court.");
-        return;
+  if (currentStep === 0 && !selectedCourt) {
+    toast.error("Please select a court.");
+    return;
+  }
+
+  if (currentStep === 1 && !selectedDate) {
+    toast.error("Please select a reservation date.");
+    return;
+  }
+
+  if (currentStep === 2 && !selectedStartTime) {
+    toast.error("Please select an available time slot.");
+    return;
+  }
+
+  if (currentStep === 3) {
+    if (
+      !guest.guest_name.trim() ||
+      !guest.guest_email.trim() ||
+      !guest.guest_phone.trim()
+    ) {
+      toast.error("Please complete the guest information.");
+      return;
     }
+  }
 
-    if (currentStep === 1 && !selectedDate) {
-        toast.error("Please select a reservation date.");
-        return;
-    }
-
-    if (currentStep === 2 && !selectedStartTime) {
-        toast.error("Please select an available time slot.");
-        return;
-    }
-
-    if (currentStep === 3) {
-      if (
-        !guest.guest_name.trim() ||
-        !guest.guest_email.trim() ||
-        !guest.guest_phone.trim()
-      ) {
-        toast.error("Please complete the guest information.");
-        return;
-      }
-    }
-
-
-        setCurrentStep((prev) => {
-        const next = Math.min(prev + 1, steps.length - 1);
-
-        requestAnimationFrame(() => {
-          scrollToStep();
-        });
-
-        return next;
-      });
-    };
-
-  const previousStep = () => {
-  setCurrentStep((prev) => {
-    const next = Math.max(prev - 1, 0);
-
-    requestAnimationFrame(() => {
-      scrollToStep();
-    });
-
-    return next;
-  });
+  setCurrentStep((prev) =>
+    Math.min(prev + 1, steps.length - 1)
+  );
 };
+    const previousStep = () => {
+  setCurrentStep((prev) =>
+    Math.max(prev - 1, 0)
+  );
+};
+
 function formatLocalDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -182,12 +192,12 @@ const submitReservation = async () => {
   }
 };
   return (
-    <section className="py-24">
+    <section  ref={stepContainerRef}
+  className="py-24">
       <Container>
         {/* Step Indicator */}
 
-        <div ref={stepContainerRef}
-  className="mx-auto mb-16 flex max-w-5xl items-center justify-between">
+        <div className="mx-auto mb-16 flex max-w-5xl items-center justify-between">
 
           {steps.map((step, index) => {
             const active = index <= currentStep;
@@ -261,19 +271,20 @@ const submitReservation = async () => {
 
         {/* Card */}
 
-        <div
-          className="
-            rounded-3xl
-            border
-            border-white/10
-            bg-slate-900/60
-            p-8
-            backdrop-blur-xl
-            lg:p-12
-          "
-        >
+       <div
+  
+  className="
+    rounded-3xl
+    border
+    border-white/10
+    bg-slate-900/60
+    p-8
+    backdrop-blur-xl
+    lg:p-12
+  "
+>
           {/* Step Content */}
-
+<div ref={stepContentRef}>
 {currentStep === 0 && (
   <CourtSelector
     selectedCourt={selectedCourt}
@@ -298,9 +309,9 @@ const submitReservation = async () => {
       date={selectedDate}
       selectedTime={selectedStartTime}
       onSelect={(start, end) => {
-        setSelectedStartTime(start);
-        setSelectedEndTime(end);
-      }}
+  setSelectedStartTime(start);
+  setSelectedEndTime(end);
+}}
     />
 )}
 
@@ -324,7 +335,7 @@ const submitReservation = async () => {
       guest={guest}
     />
 )}
-
+</div>
 {/* ✅ Reservation Summary */}
 
 {selectedCourt && (
