@@ -14,4 +14,4 @@ router.post("/", authenticate, controller.create);
 router.put("/:id", authenticate, controller.update);
 router.delete("/:id", authenticate, controller.delete);
 
-export default router;
+export default router;  
