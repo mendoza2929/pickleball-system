@@ -70,19 +70,27 @@ export class ReservationRepository {
   /**
    * Create Reservation
    */
-  async createReservation(data: {
-    user_id: number;
-    court_id: number;
-    reservation_date: string;
-    start_time: string;
-    end_time: string;
-    total_hours: number;
-    hourly_rate: number;
-    total_amount: number;
-    remarks?: string;
-    reservation_status: string;
-    payment_status: string;
-  }) {
+async createReservation(data: {
+  user_id?: number | null;
+
+  guest_name?: string;
+  guest_email?: string;
+  guest_phone?: string;
+
+  court_id: number;
+  reservation_date: string;
+  start_time: string;
+  end_time: string;
+
+  total_hours: number;
+  hourly_rate: number;
+  total_amount: number;
+
+  remarks?: string;
+
+  reservation_status: string;
+  payment_status: string;
+}) {
 
     const uuid = randomUUID();
 
@@ -92,39 +100,57 @@ export class ReservationRepository {
     const [result]: any = await pool.query(
       `
       INSERT INTO reservations
-      (
-        uuid,
-        reservation_no,
-        user_id,
-        court_id,
-        reservation_date,
-        start_time,
-        end_time,
-        total_hours,
-        hourly_rate,
-        total_amount,
-        reservation_status,
-        payment_status,
-        remarks
-      )
-      VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (
+      uuid,
+      reservation_no,
+      user_id,
+      guest_name,
+      guest_email,
+      guest_phone,
+      court_id,
+      reservation_date,
+      start_time,
+      end_time,
+      total_hours,
+      hourly_rate,
+      total_amount,
+      reservation_status,
+      payment_status,
+      remarks
+    )
+    VALUES
+    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
-        uuid,
-        reservationNo,
-        data.user_id,
-        data.court_id,
-        data.reservation_date,
-        data.start_time,
-        data.end_time,
-        data.total_hours,
-        data.hourly_rate,
-        data.total_amount,
-        data.reservation_status,
-        data.payment_status,
-        data.remarks ?? null,
-      ]
+      uuid,
+      reservationNo,
+
+      data.user_id ?? null,
+
+      data.guest_name ?? null,
+      data.guest_email ?? null,
+      data.guest_phone ?? null,
+
+      data.court_id,
+
+      data.reservation_date,
+
+      data.start_time,
+
+      data.end_time,
+
+      data.total_hours,
+
+      data.hourly_rate,
+
+      data.total_amount,
+
+      data.reservation_status,
+
+      data.payment_status,
+
+      data.remarks ?? null,
+    ]
     );
 
     return this.findById(result.insertId);
@@ -142,19 +168,29 @@ export class ReservationRepository {
 
         c.name AS court_name,
 
+        CASE
+
+        WHEN r.user_id IS NOT NULL THEN
+
         CONCAT(
             u.first_name,
             ' ',
             u.last_name
-        ) AS player_name
+        )
+
+        ELSE
+
+        r.guest_name
+
+        END AS player_name
 
       FROM reservations r
 
       INNER JOIN courts c
         ON c.id = r.court_id
 
-      INNER JOIN users u
-        ON u.id = r.user_id
+      LEFT JOIN users u
+      ON u.id = r.user_id
 
       WHERE r.id = ?
 
@@ -193,11 +229,29 @@ export class ReservationRepository {
 
     const [rows]: any = await pool.query(
       `
-      SELECT
-        *
-      FROM reservations
-      ORDER BY reservation_date DESC,
-               start_time DESC
+     SELECT
+          r.*,
+
+          c.name AS court_name,
+
+          CASE
+              WHEN r.user_id IS NOT NULL THEN
+                  CONCAT(u.first_name,' ',u.last_name)
+              ELSE
+                  r.guest_name
+          END AS player_name
+
+      FROM reservations r
+
+      INNER JOIN courts c
+          ON c.id = r.court_id
+
+      LEFT JOIN users u
+          ON u.id = r.user_id
+
+      ORDER BY
+          reservation_date DESC,
+          start_time DESC
       `
     );
 
@@ -241,6 +295,27 @@ export class ReservationRepository {
               reservationId,
           ]
       );
+  }
+
+  async getByUuid(uuid: string) {
+
+    const [rows]: any = await pool.query(
+      `
+        SELECT *
+        FROM reservations
+        WHERE uuid = ?
+        LIMIT 1
+      `,
+      [uuid]
+    );
+
+    if (!rows.length) {
+      throw new Error("Reservation not found.");(
+        "Reservation not found."
+      );
+    }
+
+    return rows[0];
   }
 
 }

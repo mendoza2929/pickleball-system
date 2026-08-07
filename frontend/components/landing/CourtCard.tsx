@@ -1,305 +1,269 @@
 "use client";
 
-import Image from "next/image";
 import { motion } from "framer-motion";
 import Link from "next/link";
 
 import {
   ArrowRight,
-  MapPin,
-  Users,
-  Star,
-  CheckCircle,
+  CheckCircle2,
+  CircleDollarSign,
+  Hash,
+  Layers3,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
 type CourtCardProps = {
-
+  id: number;
+  court_number: number;
   name: string;
-
-  image: string;
-
-  type: string;
-
-  location: string;
-
-  available: boolean;
-
-  rating: number;
-
-  price: number;
-
-  capacity: number;
-
-  features: string[];
-
+  description?: string | null;
+  surface_type: string;
+  hourly_rate: number;
+  status: string;
   delay?: number;
 };
 
 export default function CourtCard({
-
+  court_number,
   name,
-  image,
-  type,
-  location,
-  available,
-  rating,
-  price,
-  capacity,
-  features,
+  description,
+  surface_type,
+  hourly_rate,
+  status,
   delay = 0,
-
 }: CourtCardProps) {
+  const available = status.toUpperCase() === "AVAILABLE";
 
   return (
-
     <motion.div
-
       initial={{
         opacity: 0,
-        y: 70,
+        y: 60,
       }}
-
       whileInView={{
         opacity: 1,
         y: 0,
       }}
-
       viewport={{
         once: true,
       }}
-
       transition={{
-        duration: .7,
+        duration: 0.7,
         delay,
       }}
-
       whileHover={{
-        y: -10,
+        y: -8,
       }}
-
       className="
-      group
-      overflow-hidden
-      rounded-[30px]
-      border
-      border-white/10
-      bg-slate-900/60
-      backdrop-blur-xl
-      shadow-xl
-      transition-all
-      duration-500
-      hover:border-lime-400/40
-      hover:shadow-[0_25px_70px_rgba(132,255,0,.18)]
+        group
+        overflow-hidden
+        rounded-[30px]
+        border
+        border-white/10
+        bg-slate-900/60
+        backdrop-blur-xl
+        transition-all
+        duration-500
+        hover:border-lime-400/30
+        hover:shadow-[0_25px_70px_rgba(132,255,0,.18)]
       "
-
     >
+      {/* Hero */}
 
-      {/* IMAGE */}
-
-      <div className="relative aspect-[16/10] overflow-hidden">
-
-        <Image
-          src={image}
-          alt={name}
-          fill
+      <div
+        className="
+          relative
+          flex
+          aspect-[16/10]
+          items-center
+          justify-center
+          overflow-hidden
+          bg-gradient-to-br
+          from-lime-400/15
+          via-slate-900
+          to-slate-950
+        "
+      >
+        <div
           className="
-          object-cover
-          transition-transform
-          duration-700
-          group-hover:scale-110
+            absolute
+            h-72
+            w-72
+            rounded-full
+            bg-lime-400/10
+            blur-3xl
           "
         />
 
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent" />
-
-        {/* Availability */}
-
-        <div
-          className="
-          absolute
-          top-5
-          left-5
-          rounded-full
-          bg-lime-400
-          px-4
-          py-2
-          text-sm
-          font-semibold
-          text-slate-950
-          "
-        >
-          {available ? "Available Now" : "Reserved"}
-        </div>
-
-        {/* Rating */}
+        <span className="relative text-8xl">
+          🏓
+        </span>
 
         <div
           className="
-          absolute
-          right-5
-          top-5
-          flex
-          items-center
-          gap-1
-          rounded-full
-          bg-black/70
-          px-3
-          py-2
-          text-white
-          backdrop-blur
+            absolute
+            left-5
+            top-5
+            rounded-full
+            px-4
+            py-2
+            text-sm
+            font-semibold
+            backdrop-blur-xl
+            border
+            border-white/10
+            bg-black/40
           "
         >
-
-          <Star
-            size={16}
-            className="fill-yellow-400 text-yellow-400"
-          />
-
-          {rating}
-
+          Court #{court_number}
         </div>
 
+        <div
+          className={`
+            absolute
+            right-5
+            top-5
+            rounded-full
+            px-4
+            py-2
+            text-sm
+            font-semibold
+
+            ${
+              available
+                ? "bg-lime-400 text-slate-950"
+                : "bg-red-500 text-white"
+            }
+          `}
+        >
+          {status}
+        </div>
       </div>
 
-      {/* CONTENT */}
+      {/* Content */}
 
       <div className="space-y-6 p-8">
-
         <div>
-
-          <h3 className="text-3xl font-bold">
-
+          <h3 className="text-3xl font-black">
             {name}
-
           </h3>
 
           <p className="mt-2 text-lime-300">
-
-            {type}
-
+            {surface_type}
           </p>
-
         </div>
 
-        <div className="space-y-3 text-slate-400">
+        {/* Details */}
 
-          <div className="flex items-center gap-2">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-slate-300">
+            <Hash
+              size={18}
+              className="text-lime-400"
+            />
 
-            <MapPin size={18} />
-
-            {location}
-
+            <span>
+              Court Number: {court_number}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 text-slate-300">
+            <Layers3
+              size={18}
+              className="text-lime-400"
+            />
 
-            <Users size={18} />
-
-            {capacity} Players
-
+            <span>
+              Surface: {surface_type}
+            </span>
           </div>
 
+          <div className="flex items-center gap-3 text-slate-300">
+            <CircleDollarSign
+              size={18}
+              className="text-lime-400"
+            />
+
+            <span>
+              ₱{hourly_rate} / hour
+            </span>
+          </div>
         </div>
 
-        {/* FEATURES */}
+        {/* Description */}
 
-        <div className="flex flex-wrap gap-3">
+        <div
+          className="
+            rounded-2xl
+            border
+            border-white/10
+            bg-white/5
+            p-5
+          "
+        >
+          <div className="mb-3 flex items-center gap-2">
+            <CheckCircle2
+              size={18}
+              className="text-lime-400"
+            />
 
-          {features.map((item) => (
+            <span className="font-medium">
+              Description
+            </span>
+          </div>
 
-            <div
-
-              key={item}
-
-              className="
-              flex
-              items-center
-              gap-2
-              rounded-full
-              border
-              border-white/10
-              bg-white/5
-              px-3
-              py-2
-              text-sm
-              text-slate-300
-              "
-
-            >
-
-              <CheckCircle
-                size={14}
-                className="text-lime-400"
-              />
-
-              {item}
-
-            </div>
-
-          ))}
-
+          <p className="leading-7 text-slate-400">
+            {description ||
+              "Professional pickleball court ready for your next match."}
+          </p>
         </div>
 
-        {/* PRICE */}
+        {/* Footer */}
 
         <div className="flex items-center justify-between">
-
           <div>
-
             <p className="text-sm text-slate-500">
-
-              Starting From
-
+              Hourly Rate
             </p>
 
             <h4 className="text-4xl font-black text-lime-400">
+              ₱{hourly_rate}
 
-              ₱{price}
-
-              <span className="text-lg text-white">
-
-                /hour
-
+              <span className="ml-1 text-lg text-white">
+                /hr
               </span>
-
             </h4>
-
           </div>
 
           <Button
             className="
-            hero-btn-primary
-            rounded-full
-            px-6
+              hero-btn-primary
+              rounded-full
+              px-6
             "
             asChild
           >
-
-            <Link href="/reservation" className="group">
-
+            <Link
+              href="/reservation"
+              className="group"
+            >
               Reserve
 
               <ArrowRight
                 className="
-                ml-2
-                h-5
-                w-5
-                transition-transform
-                duration-300
-                group-hover:translate-x-1
+                  ml-2
+                  h-5
+                  w-5
+                  transition-transform
+                  duration-300
+                  group-hover:translate-x-1
                 "
               />
-
             </Link>
-
           </Button>
-
         </div>
-
       </div>
-
     </motion.div>
   );
 }

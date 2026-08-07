@@ -18,10 +18,34 @@ export const createReservationSchema = z.object({
     "Invalid time format. Use HH:mm"
   ),
 
-  remarks: z.string().optional(),
+  // Guest Information
+  guest_name: z
+    .string()
+    .trim()
+    .min(2)
+    .max(150)
+    .optional(),
+
+  guest_email: z
+    .string()
+    .email()
+    .max(150)
+    .optional(),
+
+  guest_phone: z
+    .string()
+    .min(7)
+    .max(30)
+    .optional(),
+
+  remarks: z
+    .string()
+    .max(500)
+    .optional(),
 });
 
-export const updateReservationSchema = createReservationSchema.partial();
+export const updateReservationSchema =
+  createReservationSchema.partial();
 
 export type CreateReservationInput =
   z.infer<typeof createReservationSchema>;

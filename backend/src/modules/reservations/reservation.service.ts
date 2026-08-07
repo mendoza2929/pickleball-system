@@ -44,7 +44,7 @@ export class ReservationService {
      * Create Reservation
      */
     async create(
-        userId: number,
+        userId: number | null,
         data: CreateReservationInput
     ) {
 
@@ -61,6 +61,18 @@ export class ReservationService {
             throw new NotFoundError(
                 "Court not found."
             );
+        }
+
+        if (!userId) {
+            if (
+                !data.guest_name ||
+                !data.guest_email ||
+                !data.guest_phone
+            ) {
+                throw new BadRequestError(
+                    "Guest name, email and phone are required."
+                );
+            }
         }
 
         if (court.status !== COURT_STATUS.AVAILABLE) {
@@ -175,37 +187,43 @@ export class ReservationService {
 
         return await this.reservationRepository.createReservation({
 
-            user_id: userId,
+        user_id: userId,
 
-            court_id: data.court_id,
+        guest_name: data.guest_name,
 
-            reservation_date:
-                data.reservation_date,
+        guest_email: data.guest_email,
 
-            start_time:
-                data.start_time,
+        guest_phone: data.guest_phone,
 
-            end_time:
-                data.end_time,
+        court_id: data.court_id,
 
-            total_hours:
-                totalHours,
+        reservation_date:
+            data.reservation_date,
 
-            hourly_rate:
-                hourlyRate,
+        start_time:
+            data.start_time,
 
-            total_amount:
-                totalAmount,
+        end_time:
+            data.end_time,
 
-            remarks:
-                data.remarks,
+        total_hours:
+            totalHours,
 
-            reservation_status:
-                RESERVATION_STATUS.PENDING,
+        hourly_rate:
+            hourlyRate,
 
-            payment_status:
-                PAYMENT_STATUS.PENDING,
-        });
+        total_amount:
+            totalAmount,
+
+        remarks:
+            data.remarks,
+
+        reservation_status:
+            RESERVATION_STATUS.PENDING,
+
+        payment_status:
+            PAYMENT_STATUS.PENDING,
+    });
 
     }
 
@@ -275,5 +293,8 @@ export class ReservationService {
         );
 
     }
+    async getByUuid(uuid: string) {
+  return this.reservationRepository.getByUuid(uuid);
+}
 
 }

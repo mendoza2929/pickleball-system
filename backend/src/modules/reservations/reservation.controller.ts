@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
+import { AuthRequest } from "../../middleware/authenticate";
 import { asyncHandler } from "../../shared/utils/asyncHandler";
 import { ApiResponse } from "../../utils/apiResponse";
-import { AuthRequest } from "../../middleware/authenticate";
+
 
 import { ReservationService } from "./reservation.service";
 import {
@@ -17,8 +18,9 @@ export class ReservationController {
   create = asyncHandler(async (req: AuthRequest, res: Response) => {
     const data = createReservationSchema.parse(req.body);
 
-    const reservation = await this.reservationService.create(
-      req.user!.id,
+    const reservation =
+    await this.reservationService.create(
+      req.user?.id ?? null,
       data
     );
 
@@ -76,6 +78,19 @@ export class ReservationController {
       "Reservation retrieved successfully."
     );
   });
+
+    getByUuid = asyncHandler(async (req: Request, res: Response) => {
+      const uuid = req.params.uuid as string;
+
+      const reservation =
+        await this.reservationService.getByUuid(uuid);
+
+      return ApiResponse.success(
+        res,
+        reservation,
+        "Reservation retrieved successfully."
+      );
+    });
 
   /**
    * PATCH /api/reservations/:id/cancel

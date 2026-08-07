@@ -2,7 +2,6 @@ import { Router } from "express";
 
 import { CourtScheduleController } from "./courtSchedule.controller";
 import { authenticate } from "../../middleware/authenticate";
-// import { authorize } from "../../middleware/authorize";
 
 const router = Router();
 
@@ -12,41 +11,36 @@ const controller = new CourtScheduleController();
  * Court Schedule Routes
  */
 
-// Create
+// Create (Admin)
 router.post(
   "/",
   authenticate,
-  // authorize("ADMIN"),
   controller.create
 );
 
-// Get All
+// Get All (Public)
 router.get(
   "/",
-  authenticate,
   controller.getAll
 );
 
-// Get By Court
+// Get By Court (Public)
 router.get(
   "/court/:courtId",
-  authenticate,
   controller.getByCourt
 );
 
-// Update
+// Update (Admin)
 router.put(
   "/:id",
   authenticate,
-  // authorize("ADMIN"),
   controller.update
 );
 
-// Delete
+// Delete (Admin)
 router.delete(
   "/:id",
   authenticate,
-  // authorize("ADMIN"),
   controller.delete
 );
 

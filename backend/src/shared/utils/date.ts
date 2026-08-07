@@ -9,5 +9,15 @@ const DAYS = [
 ] as const;
 
 export function getDayOfWeek(date: string) {
-  return DAYS[new Date(date).getDay()];
+  const [year, month, day] = date
+    .split("-")
+    .map(Number);
+
+  const localDate = new Date(
+    year,
+    month - 1,
+    day
+  );
+
+  return DAYS[localDate.getDay()];
 }
