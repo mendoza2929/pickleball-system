@@ -239,20 +239,27 @@ export class ReservationService {
     /**
      * Reservation Details
      */
-    async getById(id: number) {
-
+    async getById(
+        id: number,
+        userId: number
+        ) {
         const reservation =
             await this.reservationRepository.findById(id);
 
         if (!reservation) {
             throw new NotFoundError(
-                "Reservation not found."
+            "Reservation not found."
+            );
+        }
+
+        if (reservation.user_id !== userId) {
+            throw new NotFoundError(
+            "Reservation not found."
             );
         }
 
         return reservation;
-
-    }
+        }
 
     /**
      * My Reservations
@@ -268,14 +275,22 @@ export class ReservationService {
     /**
      * Cancel Reservation
      */
-    async cancel(id: number) {
-
+    async cancel(
+        id: number,
+        userId: number
+        ) {
         const reservation =
             await this.reservationRepository.findById(id);
 
         if (!reservation) {
             throw new NotFoundError(
-                "Reservation not found."
+            "Reservation not found."
+            );
+        }
+
+        if (reservation.user_id !== userId) {
+            throw new NotFoundError(
+            "Reservation not found."
             );
         }
 
@@ -284,17 +299,48 @@ export class ReservationService {
             RESERVATION_STATUS.CANCELLED
         ) {
             throw new BadRequestError(
-                "Reservation already cancelled."
+            "Reservation already cancelled."
             );
         }
 
         return await this.reservationRepository.cancelReservation(
             id
         );
+        }
+        async getByUuid(uuid: string) {
+        const reservation =
+            await this.reservationRepository.getByUuid(uuid);
 
-    }
-    async getByUuid(uuid: string) {
-  return this.reservationRepository.getByUuid(uuid);
-}
+        if (!reservation) {
+            throw new NotFoundError(
+            "Reservation not found."
+            );
+        }
+
+        return {
+            uuid: reservation.uuid,
+
+            reservation_no:
+            reservation.reservation_no,
+
+            reservation_date:
+            reservation.reservation_date,
+
+            start_time:
+            reservation.start_time,
+
+            end_time:
+            reservation.end_time,
+
+            reservation_status:
+            reservation.reservation_status,
+
+            payment_status:
+            reservation.payment_status,
+
+            court_name:
+            reservation.court_name,
+        };
+        }
 
 }

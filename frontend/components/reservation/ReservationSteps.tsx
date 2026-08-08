@@ -11,6 +11,7 @@ import GuestForm from "./GuestForm";
 import BookingSummary from "./BookingSummary";
 import { useCreateReservation } from "@/hooks/useCreateReservation";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import {
   useRouter,
   useSearchParams,
@@ -474,34 +475,49 @@ const submitReservation = async () => {
             </button>
 
             <button
-              onClick={() => {
-              if (currentStep === steps.length - 1) {
-                submitReservation();
-                return;
-              }
+  onClick={() => {
+    if (currentStep === steps.length - 1) {
+      submitReservation();
+      return;
+    }
 
-              nextStep();
-            }}
-              className="
-                rounded-xl
-                bg-lime-400
-                px-7
-                py-3
-                font-semibold
-                text-slate-950
-                transition
-                hover:bg-lime-300
-              "
-            >
-            {currentStep === 0 && "Continue to Date"}
-            {currentStep === 1 && "Continue to Time"}
-            {currentStep === 2 && "Continue to Guest"}
-            {currentStep === 3 && "Review Reservation"}
-            {currentStep === 4 &&
-            (createReservation.isPending
-              ? "Creating Reservation..."
-              : "Confirm Reservation")}
-            </button>
+    nextStep();
+  }}
+  disabled={createReservation.isPending}
+  className="
+    flex
+    items-center
+    justify-center
+    rounded-xl
+    bg-lime-400
+    px-7
+    py-3
+    font-semibold
+    text-slate-950
+    transition
+    hover:bg-lime-300
+    disabled:cursor-not-allowed
+    disabled:opacity-70
+  "
+>
+  {currentStep === 4 ? (
+    createReservation.isPending ? (
+      <>
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        Creating Reservation...
+      </>
+    ) : (
+      "Confirm Reservation"
+    )
+  ) : (
+    <>
+      {currentStep === 0 && "Continue to Date"}
+      {currentStep === 1 && "Continue to Time"}
+      {currentStep === 2 && "Continue to Guest"}
+      {currentStep === 3 && "Review Reservation"}
+    </>
+  )}
+</button>
 
           </div>
         </div>

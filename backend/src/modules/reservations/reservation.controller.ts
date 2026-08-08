@@ -66,18 +66,23 @@ export class ReservationController {
   /**
    * GET /api/reservations/:id
    */
-  getById = asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
+      getById = asyncHandler(
+      async (req: AuthRequest, res: Response) => {
+        const id = Number(req.params.id);
 
-    const reservation =
-      await this.reservationService.getById(id);
+        const reservation =
+          await this.reservationService.getById(
+            id,
+            req.user!.id
+          );
 
-    return ApiResponse.success(
-      res,
-      reservation,
-      "Reservation retrieved successfully."
+        return ApiResponse.success(
+          res,
+          reservation,
+          "Reservation retrieved successfully."
+        );
+      }
     );
-  });
 
     getByUuid = asyncHandler(async (req: Request, res: Response) => {
       const uuid = req.params.uuid as string;
@@ -95,16 +100,21 @@ export class ReservationController {
   /**
    * PATCH /api/reservations/:id/cancel
    */
-  cancel = asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
+  cancel = asyncHandler(
+    async (req: AuthRequest, res: Response) => {
+      const id = Number(req.params.id);
 
-    const reservation =
-      await this.reservationService.cancel(id);
+      const reservation =
+        await this.reservationService.cancel(
+          id,
+          req.user!.id
+        );
 
-    return ApiResponse.success(
-      res,
-      reservation,
-      "Reservation cancelled successfully."
-    );
-  });
+      return ApiResponse.success(
+        res,
+        reservation,
+        "Reservation cancelled successfully."
+      );
+    }
+  );
 }

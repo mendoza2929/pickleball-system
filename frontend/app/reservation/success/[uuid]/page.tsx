@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useReservation } from "@/hooks/useReservation";
-
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 export default function ReservationSuccessPage() {
   const params = useParams();
 
@@ -18,9 +18,10 @@ export default function ReservationSuccessPage() {
 
   if (isLoading) {
     return (
-      <section className="flex min-h-screen items-center justify-center bg-slate-950">
-        <p className="text-slate-400">Loading reservation...</p>
-      </section>
+      <LoadingSpinner
+        fullScreen
+        text="Loading reservation..."
+      />
     );
   }
 
