@@ -48,6 +48,7 @@ export default function ReservationSteps() {
   });
   const stepContainerRef = useRef<HTMLDivElement>(null);
   const stepContentRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const { data: courtSchedules = [] } =
   useCourtSchedules(selectedCourt);
   const router = useRouter();
@@ -71,32 +72,41 @@ useEffect(() => {
   );
 }, [courtId]);
 
-useEffect(() => {
-  const id = requestAnimationFrame(() => {
-    scrollToStep();
-  });
-
-  return () => cancelAnimationFrame(id);
-}, [currentStep]);
 
 
-
-const scrollToStep = () => {
-  if (!stepContentRef.current) return;
-
+const scrollToCurrentStep = (step: number) => {
   const navbarHeight = 90;
 
-  const y =
-    stepContentRef.current.getBoundingClientRect().top +
-    window.scrollY -
-    navbarHeight;
+  let target: HTMLElement | null = null;
 
-  window.scrollTo({
-    top: y,
-    behavior: "smooth",
-  });
+  switch (step) {
+    case 1:
+      target = document.getElementById("date-step");
+      break;
+
+    case 2:
+      target = document.getElementById("time-step");
+      break;
+
+    case 3:
+      target = document.getElementById("guest-step");
+      break;
+
+    case 4:
+      target = document.getElementById("summary-step");
+      break;
+
+    default:
+      target = document.getElementById("court-step");
+  }
+
+  if (!target) return;
+
+ target.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
 };
-
 const nextStep = () => {
   if (currentStep === 0 && !selectedCourt) {
     toast.error("Please select a court.");
@@ -124,14 +134,26 @@ const nextStep = () => {
     }
   }
 
-  setCurrentStep((prev) =>
-    Math.min(prev + 1, steps.length - 1)
-  );
+const next = Math.min(currentStep + 1, steps.length - 1);
+
+setCurrentStep(next);
+
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    scrollToCurrentStep(next);
+  });
+});
 };
-    const previousStep = () => {
-  setCurrentStep((prev) =>
-    Math.max(prev - 1, 0)
-  );
+   const previousStep = () => {
+  const prev = Math.max(currentStep - 1, 0);
+
+setCurrentStep(prev);
+
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    scrollToCurrentStep(prev);
+  });
+});
 };
 
 function formatLocalDate(date: Date) {
@@ -193,7 +215,7 @@ const submitReservation = async () => {
 };
   return (
     <section  ref={stepContainerRef}
-  className="py-24">
+   className="py-24 pb-48 lg:pb-72">
       <Container>
         {/* Step Indicator */}
 
@@ -272,7 +294,7 @@ const submitReservation = async () => {
         {/* Card */}
 
        <div
-  
+   ref={cardRef}
   className="
     rounded-3xl
     border
@@ -285,56 +307,82 @@ const submitReservation = async () => {
 >
           {/* Step Content */}
 <div ref={stepContentRef}>
-{currentStep === 0 && (
-  <CourtSelector
-    selectedCourt={selectedCourt}
-    onSelect={setSelectedCourt}
-  />
-)}
+  {/* Court */}
 
-{currentStep === 1 && (
-  <DateSelector
-    courtId={selectedCourt}
-    schedules={courtSchedules}
-    selectedDate={selectedDate}
-    onSelect={setSelectedDate}
-  />
-)}
+  {currentStep === 0 && (
+    <div id="court-step">
+      <CourtSelector
+        selectedCourt={selectedCourt}
+        onSelect={setSelectedCourt}
+      />
+    </div>
+  )}
 
-{currentStep === 2 &&
-  selectedCourt &&
-  selectedDate && (
-    <TimeSelector
-      courtId={selectedCourt}
-      date={selectedDate}
-      selectedTime={selectedStartTime}
-      onSelect={(start, end) => {
-  setSelectedStartTime(start);
-  setSelectedEndTime(end);
-}}
-    />
-)}
+  {/* Date */}
 
-{currentStep === 3 && (
-  <GuestForm
-    value={guest}
-    onChange={setGuest}
-  />
-)}
+  {currentStep === 1 && (
+    <div
+      id="date-step"
+      className="scroll-mt-28"
+    >
+      <DateSelector
+        courtId={selectedCourt}
+        schedules={courtSchedules}
+        selectedDate={selectedDate}
+        onSelect={setSelectedDate}
+      />
+    </div>
+  )}
 
-{currentStep === 4 &&
-  selectedCourt &&
-  selectedDate &&
-  selectedStartTime &&
-  selectedEndTime && (
-    <BookingSummary
-      courtId={selectedCourt}
-      date={selectedDate}
-      startTime={selectedStartTime}
-      endTime={selectedEndTime}
-      guest={guest}
-    />
-)}
+  {/* Time */}
+
+  {currentStep === 2 &&
+    selectedCourt &&
+    selectedDate && (
+     <div
+        id="time-step"
+        className="scroll-mt-28"
+      >
+        <TimeSelector
+          courtId={selectedCourt}
+          date={selectedDate}
+          selectedTime={selectedStartTime}
+          onSelect={(start, end) => {
+            setSelectedStartTime(start);
+            setSelectedEndTime(end);
+          }}
+        />
+      </div>
+    )}
+
+  {/* Guest */}
+
+  {currentStep === 3 && (
+    <div id="guest-step"  className="scroll-mt-28">
+      <GuestForm
+        value={guest}
+        onChange={setGuest}
+      />
+    </div>
+  )}
+
+  {/* Summary */}
+
+  {currentStep === 4 &&
+    selectedCourt &&
+    selectedDate &&
+    selectedStartTime &&
+    selectedEndTime && (
+      <div id="summary-step">
+        <BookingSummary
+          courtId={selectedCourt}
+          date={selectedDate}
+          startTime={selectedStartTime}
+          endTime={selectedEndTime}
+          guest={guest}
+        />
+      </div>
+    )}
 </div>
 {/* ✅ Reservation Summary */}
 
