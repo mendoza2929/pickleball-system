@@ -66,29 +66,58 @@ export class ReservationController {
   /**
    * GET /api/reservations/:id
    */
-     getById = asyncHandler(
-        async (
-          req: AuthRequest,
-          res: Response
-        ) => {
+     /**
+     * GET /api/reservations/:id
+     */
+    getById = asyncHandler(
+      async (
+        req: AuthRequest,
+        res: Response
+      ) => {
+        const id = Number(req.params.id);
 
-          const id =
-            Number(req.params.id);
-
-          const reservation =
-            await this.reservationService.getById(
-              id,
-              req.user!.id,
-              req.user!.role_name
-            );
-
-          return ApiResponse.success(
-            res,
-            reservation,
-            "Reservation retrieved successfully."
-          );
+        // Validate reservation ID
+        if (Number.isNaN(id)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid reservation ID.",
+          });
         }
-      );
+
+        // User must be authenticated
+        if (!req.user) {
+          return res.status(401).json({
+            success: false,
+            message: "Authentication required.",
+          });
+        }
+
+        const userId = req.user.id;
+        const roleName = req.user.role_name;
+
+        // User role is required
+        if (!roleName) {
+          return res.status(403).json({
+            success: false,
+            message: "User role is required.",
+          });
+        }
+
+        // Get reservation
+        const reservation =
+          await this.reservationService.getById(
+            id,
+            userId,
+            roleName
+          );
+
+        return ApiResponse.success(
+          res,
+          reservation,
+          "Reservation retrieved successfully."
+        );
+      }
+    );
 
     getByUuid = asyncHandler(async (req: Request, res: Response) => {
       const uuid = req.params.uuid as string;
