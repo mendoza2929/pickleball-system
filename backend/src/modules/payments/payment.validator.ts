@@ -1,15 +1,21 @@
 import { z } from "zod";
 
-export const createPaymentSchema = z.object({
-    reservation_id: z.number().int().positive(),
+export const PAYMENT_METHOD = {
+  GCASH: "GCASH",
+} as const;
 
-    payment_method: z.enum([
-        "Cash",
-        "GCash",
-        "Maya",
-        "Credit Card",
-    ]),
-});
+export const createPaymentSchema =
+  z.object({
+    reservation_id:
+      z.number().int().positive(),
+
+    payment_method:
+      z.enum([
+        PAYMENT_METHOD.GCASH,
+      ]),
+  });
 
 export type CreatePaymentInput =
-    z.infer<typeof createPaymentSchema>;
+  z.infer<
+    typeof createPaymentSchema
+  >;

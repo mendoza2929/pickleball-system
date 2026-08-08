@@ -171,31 +171,36 @@ export class ReservationService {
             );
         }
 
-        //---------------------------------------------------
-        // Payment
-        //---------------------------------------------------
+      // ---------------------------------------------------
+// Payment
+// ---------------------------------------------------
 
-        const hourlyRate =
-            Number(court.hourly_rate);
+const hourlyRate =
+    Number(court.hourly_rate);
 
-        const totalAmount =
-            hourlyRate * totalHours;
+const totalAmount =
+    hourlyRate * totalHours;
 
-        //---------------------------------------------------
-        // Save
-        //---------------------------------------------------
+// ---------------------------------------------------
+// Save Reservation
+// ---------------------------------------------------
 
-        return await this.reservationRepository.createReservation({
+const reservation =
+    await this.reservationRepository.createReservation({
 
         user_id: userId,
 
-        guest_name: data.guest_name,
+        guest_name:
+            data.guest_name,
 
-        guest_email: data.guest_email,
+        guest_email:
+            data.guest_email,
 
-        guest_phone: data.guest_phone,
+        guest_phone:
+            data.guest_phone,
 
-        court_id: data.court_id,
+        court_id:
+            data.court_id,
 
         reservation_date:
             data.reservation_date,
@@ -225,6 +230,17 @@ export class ReservationService {
             PAYMENT_STATUS.UNPAID,
     });
 
+return {
+    id: reservation.id,
+
+    // Payment API expects this field
+    reservation_id: reservation.id,
+
+    uuid: reservation.uuid,
+
+    reservation_no:
+        reservation.reservation_no,
+};
     }
 
     /**

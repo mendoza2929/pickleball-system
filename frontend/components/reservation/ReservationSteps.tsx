@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import Container from "@/components/common/Container";
-
+import { useCreatePayment } from "@/hooks/useCreatePayment";
 import CourtSelector from "./CourtSelector";
 import DateSelector from "./DateSelector";
 import TimeSelector from "./TimeSelector";
@@ -11,7 +11,7 @@ import GuestForm from "./GuestForm";
 import BookingSummary from "./BookingSummary";
 import { useCreateReservation } from "@/hooks/useCreateReservation";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import {
   useRouter,
   useSearchParams,
@@ -24,6 +24,7 @@ const steps = [
   "Time",
   "Guest",
   "Summary",
+  "Payment",
 ];
 
 export default function ReservationSteps() {
@@ -31,7 +32,7 @@ export default function ReservationSteps() {
 
   const [selectedCourt, setSelectedCourt] =
     useState<number | null>(null);
-
+  const [isStepLoading, setIsStepLoading] = useState(false);
   const [selectedDate, setSelectedDate] =
     useState<Date | null>(null);
 
@@ -40,7 +41,8 @@ export default function ReservationSteps() {
 
   const [selectedEndTime, setSelectedEndTime] =
     useState<string | null>(null);
-
+  const [paymentMethod, setPaymentMethod] =
+  useState<"GCASH" | null>(null);
   const [guest, setGuest] = useState({
     guest_name: "",
     guest_email: "",
@@ -59,6 +61,8 @@ const courtId = searchParams.get("courtId");
 
   const createReservation =
   useCreateReservation();
+  const createPayment =
+  useCreatePayment();
 useEffect(() => {
   if (!courtId) return;
 
@@ -74,7 +78,36 @@ useEffect(() => {
 }, [courtId]);
 
 
+const handleNextStep = async () => {
+  if (isStepLoading) return;
 
+  setIsStepLoading(true);
+
+  // Small delay so the loading state is visible
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  nextStep();
+
+  setIsStepLoading(false);
+};
+
+const handleContinue = async () => {
+  if (isStepLoading) return;
+
+  // Final payment step
+  if (currentStep === steps.length - 1) {
+    await submitReservation();
+    return;
+  }
+
+  setIsStepLoading(true);
+
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  nextStep();
+
+  setIsStepLoading(false);
+};
 const scrollToCurrentStep = (step: number) => {
   const navbarHeight = 90;
 
@@ -97,16 +130,25 @@ const scrollToCurrentStep = (step: number) => {
       target = document.getElementById("summary-step");
       break;
 
+    case 5:
+      target = document.getElementById("payment-step");
+      break;
+
     default:
       target = document.getElementById("court-step");
   }
 
   if (!target) return;
 
- target.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+  const top =
+    target.getBoundingClientRect().top +
+    window.scrollY -
+    navbarHeight;
+
+  window.scrollTo({
+    top,
+    behavior: "smooth",
+  });
 };
 const nextStep = () => {
   if (currentStep === 0 && !selectedCourt) {
@@ -135,6 +177,7 @@ const nextStep = () => {
     }
   }
 
+  
 const next = Math.min(currentStep + 1, steps.length - 1);
 
 setCurrentStep(next);
@@ -175,42 +218,111 @@ const submitReservation = async () => {
   }
 
   try {
-    console.log({
-      court_id: selectedCourt,
-      reservation_date: formatLocalDate(selectedDate),
-      start_time: selectedStartTime,
-      end_time: selectedEndTime,
-    });
+    // -----------------------------------------
+    // 1. Create reservation
+    // -----------------------------------------
 
-    const result =
+    const reservationResult =
       await createReservation.mutateAsync({
         court_id: selectedCourt,
 
         reservation_date:
           formatLocalDate(selectedDate),
 
-        start_time: selectedStartTime,
+        start_time:
+          selectedStartTime,
 
-        end_time: selectedEndTime,
+        end_time:
+          selectedEndTime,
 
-        guest_name: guest.guest_name,
+        guest_name:
+          guest.guest_name,
 
-        guest_email: guest.guest_email,
+        guest_email:
+          guest.guest_email,
 
-        guest_phone: guest.guest_phone,
+        guest_phone:
+          guest.guest_phone,
 
-        remarks: guest.remarks,
+        remarks:
+          guest.remarks,
       });
 
-    toast.success("Reservation created!");
+    // -----------------------------------------
+    // Get reservation ID
+    // -----------------------------------------
 
-  router.push(
-  `/reservation/success/${result.data.uuid}`
+const reservation =
+  reservationResult?.data;
+
+const reservationId =
+  reservation?.id;
+
+if (
+  !reservationId ||
+  !Number.isInteger(reservationId) ||
+  reservationId <= 0
+) {
+  console.error(
+    "Invalid reservation response:",
+    reservationResult
+  );
+
+  throw new Error(
+    "Reservation was created, but the reservation ID was not returned."
+  );
+}
+
+console.log(
+  "Reservation ID:",
+  reservationId
 );
+
+// -----------------------------------------
+// Create GCash payment
+// -----------------------------------------
+
+const paymentResult =
+  await createPayment.mutateAsync({
+    reservation_id: reservationId,
+    payment_method: "GCASH",
+  });
+
+console.log(
+  "Payment created:",
+  paymentResult
+);
+
+// -----------------------------------------
+// Get Xendit checkout URL
+// -----------------------------------------
+
+const checkoutUrl =
+  paymentResult?.data?.checkout_url;
+
+if (!checkoutUrl) {
+  throw new Error(
+    "Payment checkout URL was not returned."
+  );
+}
+
+// -----------------------------------------
+// Redirect to Xendit
+// -----------------------------------------
+
+window.location.href =
+  checkoutUrl;
+
   } catch (error: any) {
+    console.error(
+      "Reservation/payment error:",
+      error
+    );
+
     toast.error(
       error?.response?.data?.message ??
-        "Unable to create reservation."
+        error?.message ??
+        "Unable to process reservation payment."
     );
   }
 };
@@ -452,6 +564,91 @@ const submitReservation = async () => {
   </div>
 )}
 
+{/* Payment */}
+
+{/* Payment */}
+
+{currentStep === 5 && (
+  <div
+    id="payment-step"
+    className="scroll-mt-28"
+  >
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-8">
+        <p className="text-sm font-medium uppercase tracking-wider text-lime-400">
+          Payment
+        </p>
+
+        <h2 className="mt-2 text-3xl font-black">
+          Pay with GCash
+        </h2>
+
+        <p className="mt-3 text-slate-400">
+          Complete your reservation securely using GCash.
+        </p>
+      </div>
+
+      <div className="grid gap-4">
+        {/* GCash */}
+
+        <button
+          type="button"
+          onClick={() => setPaymentMethod("GCASH")}
+          className={`
+            w-full
+            rounded-2xl
+            border
+            p-6
+            text-left
+            transition-all
+            duration-300
+
+            ${
+              paymentMethod === "GCASH"
+                ? "border-lime-400 bg-lime-400/10"
+                : "border-white/10 bg-white/5 hover:border-lime-400/30 hover:bg-white/10"
+            }
+          `}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold">
+                GCash
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-400">
+                Pay securely using GCash.
+              </p>
+            </div>
+
+            <div
+              className={`
+                flex
+                h-6
+                w-6
+                items-center
+                justify-center
+                rounded-full
+                border-2
+
+                ${
+                  paymentMethod === "GCASH"
+                    ? "border-lime-400"
+                    : "border-slate-600"
+                }
+              `}
+            >
+              {paymentMethod === "GCASH" && (
+                <div className="h-3 w-3 rounded-full bg-lime-400" />
+              )}
+            </div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
           {/* Footer */}
 
@@ -474,47 +671,72 @@ const submitReservation = async () => {
               Previous
             </button>
 
-            <button
-  onClick={() => {
-    if (currentStep === steps.length - 1) {
-      submitReservation();
-      return;
-    }
-
-    nextStep();
-  }}
-  disabled={createReservation.isPending}
+<button
+  type="button"
+  onClick={handleContinue}
+  disabled={
+    isStepLoading ||
+    createReservation.isPending ||
+    createPayment.isPending
+  }
   className="
-    flex
+    inline-flex
     items-center
     justify-center
+    gap-2
     rounded-xl
     bg-lime-400
     px-7
     py-3
     font-semibold
     text-slate-950
-    transition
+    transition-all
+    duration-200
     hover:bg-lime-300
+    hover:shadow-lg
     disabled:cursor-not-allowed
-    disabled:opacity-70
+    disabled:opacity-60
   "
 >
-  {currentStep === 4 ? (
-    createReservation.isPending ? (
-      <>
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-        Creating Reservation...
-      </>
-    ) : (
-      "Confirm Reservation"
-    )
+  {isStepLoading ? (
+    <>
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Loading...
+    </>
+  ) : createReservation.isPending || createPayment.isPending ? (
+    <>
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Processing...
+    </>
+  ) : currentStep === 0 ? (
+    <>
+      Select Date
+      <ArrowRight className="h-4 w-4" />
+    </>
+  ) : currentStep === 1 ? (
+    <>
+      Select Time
+      <ArrowRight className="h-4 w-4" />
+    </>
+  ) : currentStep === 2 ? (
+    <>
+      Continue to Guest Details
+      <ArrowRight className="h-4 w-4" />
+    </>
+  ) : currentStep === 3 ? (
+    <>
+      Review Booking
+      <ArrowRight className="h-4 w-4" />
+    </>
+  ) : currentStep === 4 ? (
+    <>
+      Continue to Payment
+      <ArrowRight className="h-4 w-4" />
+    </>
   ) : (
     <>
-      {currentStep === 0 && "Continue to Date"}
-      {currentStep === 1 && "Continue to Time"}
-      {currentStep === 2 && "Continue to Guest"}
-      {currentStep === 3 && "Review Reservation"}
+      Pay with GCash
+      <ArrowRight className="h-4 w-4" />
     </>
   )}
 </button>

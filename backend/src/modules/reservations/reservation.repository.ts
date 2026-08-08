@@ -156,7 +156,7 @@ export class ReservationRepository {
       ]
     );
 
-    return this.getByUuid(uuid);
+    return this.findById(result.insertId);
   }
 
   /**

@@ -2,37 +2,47 @@ import { Router } from "express";
 
 import { PaymentController } from "./payment.controller";
 
+import { optionalAuthenticate } from "../../middleware/optionalAuthenticate";
 import { authenticate } from "../../middleware/authenticate";
-// import { authorize } from "../../middleware/authorize";
 
 const router = Router();
 
-const paymentController = new PaymentController();
+const paymentController =
+  new PaymentController();
 
 /**
- * Payment Routes
+ * POST /api/payments
+ *
+ * Create GCash payment
+ *
+ * Guest reservations are allowed,
+ * so authentication is optional.
  */
-
-// Create Payment
 router.post(
   "/",
-  authenticate,
+  optionalAuthenticate,
   paymentController.create
 );
 
-// Get All Payments
+/**
+ * GET /api/payments/uuid/:uuid
+ *
+ * Public payment lookup
+ */
 router.get(
-  "/",
-  authenticate,
-  paymentController.getAll
+  "/uuid/:uuid",
+  paymentController.getByUuid
 );
 
-// Mark Payment as Paid
-router.patch(
-  "/:id/pay",
+/**
+ * GET /api/payments/reservation/:reservationId
+ *
+ * Authenticated user's payment
+ */
+router.get(
+  "/reservation/:reservationId",
   authenticate,
-  // authorize("ADMIN"),
-  paymentController.markPaid
+  paymentController.getByReservation
 );
 
 export default router;
