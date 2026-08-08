@@ -36,14 +36,14 @@ export class PaymentController {
       );
 
       // -----------------------------------------
-      // Create Xendit payment
+      // Create PayMongo payment
       // -----------------------------------------
 
       const result =
-        await this.paymentService.create(
-          req.user?.id ?? null,
-          data
-        );
+      await this.paymentService.create(
+        req.user?.id ?? null,
+        data
+      );
 
       // -----------------------------------------
       // Return payment information
@@ -87,11 +87,7 @@ export class PaymentController {
   /**
    * GET /api/payments/reservation/:reservationId
    *
-   * Get payment for authenticated user's reservation
-   *
-   * NOTE:
-   * This endpoint can still use reservationId
-   * because it is a separate GET endpoint.
+   * Get payment for a reservation
    */
   getByReservation =
     asyncHandler(
@@ -142,8 +138,7 @@ export class PaymentController {
 
         const payment =
           await this.paymentService.getByReservation(
-            reservationId,
-            req.user.id
+            reservationId
           );
 
         // -----------------------------------------
