@@ -587,4 +587,12 @@ export class PaymentService {
       );
     }
   }
+
+  async getByUuid(uuid: string) {
+    return this.paymentRepository.getByUuid(uuid);
+  }
+
+  async getByReservation(reservationId: number) {
+    return this.paymentRepository.findByReservationId(reservationId);
+  }
 }
