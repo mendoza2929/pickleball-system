@@ -1,35 +1,23 @@
 import { Response, NextFunction } from "express";
-
 import { AuthRequest } from "./authenticate";
-
 import { ForbiddenError } from "../shared/errors/ForbiddenError";
-
 
 export function authorizeAdmin(
   req: AuthRequest,
   _res: Response,
   next: NextFunction
 ) {
-  // User must already be authenticated
   if (!req.user) {
     return next(
       new ForbiddenError(
-        "Authentication required."
+        "You must be authenticated to access the admin portal."
       )
     );
   }
 
-  // Only Owner and Admin can access
-  const allowedRoles = [
-    "Owner",
-    "Admin",
-  ];
+  const role = req.user.role_name;
 
-  if (
-    !allowedRoles.includes(
-      req.user.role_name
-    )
-  ) {
+  if (role !== "Owner" && role !== "Admin") {
     return next(
       new ForbiddenError(
         "You do not have permission to access the admin portal."
