@@ -1,4 +1,6 @@
 import { randomUUID } from "crypto";
+import { PoolConnection } from "mysql2/promise";
+
 import pool from "../../config/database";
 
 export class ReservationRepository {
@@ -6,16 +8,13 @@ export class ReservationRepository {
   /**
    * Generate Reservation Number
    *
-   * Example:
-   * RSV-20260807-000001
-   *
    * NOTE:
-   * This uses the latest reservation ID instead of COUNT(*)
-   * so cancelled/deleted records don't cause unnecessary
-   * number reuse.
+   * We will improve reservation number generation later.
    */
-  async generateReservationNumber() {
-    const [rows]: any = await pool.query(`
+  async generateReservationNumber(
+    connection: PoolConnection
+  ) {
+    const [rows]: any = await connection.query(`
       SELECT COALESCE(MAX(id), 0) + 1 AS next_number
       FROM reservations
     `);
@@ -25,39 +24,37 @@ export class ReservationRepository {
     const date = new Date();
 
     const reservationNo =
-      `RSV-${
-        date.getFullYear()
-      }${
-        String(date.getMonth() + 1).padStart(2, "0")
-      }${
-        String(date.getDate()).padStart(2, "0")
-      }-${
-        String(nextNumber).padStart(6, "0")
-      }`;
+      `RSV-` +
+      `${date.getFullYear()}` +
+      `${String(date.getMonth() + 1).padStart(2, "0")}` +
+      `${String(date.getDate()).padStart(2, "0")}-` +
+      `${String(nextNumber).padStart(6, "0")}`;
 
     return reservationNo;
   }
 
   /**
    * Check Time Conflict
+   *
+   * IMPORTANT:
+   * This uses the transaction connection.
    */
   async checkTimeConflict(
+    connection: PoolConnection,
     courtId: number,
     reservationDate: string,
     startTime: string,
     endTime: string
   ) {
-    const [rows]: any = await pool.query(
+    const [rows]: any = await connection.query(
       `
       SELECT id
       FROM reservations
       WHERE court_id = ?
         AND reservation_date = ?
         AND reservation_status != 'Cancelled'
-        AND (
-          start_time < ?
-          AND end_time > ?
-        )
+        AND start_time < ?
+        AND end_time > ?
       LIMIT 1
       `,
       [
@@ -68,11 +65,13 @@ export class ReservationRepository {
       ]
     );
 
-    return rows[0];
+    return rows[0] ?? null;
   }
 
   /**
    * Create Reservation
+   *
+   * Transaction-safe reservation creation.
    */
   async createReservation(data: {
     user_id?: number | null;
@@ -95,108 +94,219 @@ export class ReservationRepository {
     reservation_status: string;
     payment_status: string;
   }) {
-    const uuid = randomUUID();
+    const connection =
+      await pool.getConnection();
 
-    const reservationNo =
-      await this.generateReservationNumber();
+    try {
 
-    const [result]: any = await pool.query(
-      `
-      INSERT INTO reservations
-      (
-        uuid,
-        reservation_no,
-        user_id,
-        guest_name,
-        guest_email,
-        guest_phone,
-        court_id,
-        reservation_date,
-        start_time,
-        end_time,
-        total_hours,
-        hourly_rate,
-        total_amount,
-        reservation_status,
-        payment_status,
-        remarks
-      )
-      VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        uuid,
-        reservationNo,
+      /**
+       * ==========================================
+       * START TRANSACTION
+       * ==========================================
+       */
+      await connection.beginTransaction();
 
-        data.user_id ?? null,
+      /**
+       * ==========================================
+       * LOCK COURT
+       * ==========================================
+       *
+       * This is the important part.
+       *
+       * Another request trying to reserve
+       * the same court will wait until this
+       * transaction finishes.
+       */
+      const [courtRows]: any =
+        await connection.query(
+          `
+          SELECT id
+          FROM courts
+          WHERE id = ?
+          FOR UPDATE
+          `,
+          [data.court_id]
+        );
 
-        data.guest_name ?? null,
-        data.guest_email ?? null,
-        data.guest_phone ?? null,
+      if (!courtRows.length) {
+        throw new Error(
+          "COURT_NOT_FOUND"
+        );
+      }
 
-        data.court_id,
+      /**
+       * ==========================================
+       * CHECK TIME CONFLICT
+       * ==========================================
+       */
+      const conflict =
+        await this.checkTimeConflict(
+          connection,
+          data.court_id,
+          data.reservation_date,
+          data.start_time,
+          data.end_time
+        );
 
-        data.reservation_date,
+      if (conflict) {
+        throw new Error(
+          "RESERVATION_CONFLICT"
+        );
+      }
 
-        data.start_time,
+      /**
+       * ==========================================
+       * GENERATE RESERVATION NUMBER
+       * ==========================================
+       */
+      const reservationNo =
+        await this.generateReservationNumber(
+          connection
+        );
 
-        data.end_time,
+      const uuid =
+        randomUUID();
 
-        data.total_hours,
+      /**
+       * ==========================================
+       * INSERT RESERVATION
+       * ==========================================
+       */
+      const [result]: any =
+        await connection.query(
+          `
+          INSERT INTO reservations
+          (
+            uuid,
+            reservation_no,
+            user_id,
+            guest_name,
+            guest_email,
+            guest_phone,
+            court_id,
+            reservation_date,
+            start_time,
+            end_time,
+            total_hours,
+            hourly_rate,
+            total_amount,
+            reservation_status,
+            payment_status,
+            remarks
+          )
+          VALUES
+          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            uuid,
 
-        data.hourly_rate,
+            reservationNo,
 
-        data.total_amount,
+            data.user_id ?? null,
 
-        data.reservation_status,
+            data.guest_name ?? null,
+            data.guest_email ?? null,
+            data.guest_phone ?? null,
 
-        data.payment_status,
+            data.court_id,
 
-        data.remarks ?? null,
-      ]
-    );
+            data.reservation_date,
 
-    return this.findById(result.insertId);
+            data.start_time,
+
+            data.end_time,
+
+            data.total_hours,
+
+            data.hourly_rate,
+
+            data.total_amount,
+
+            data.reservation_status,
+
+            data.payment_status,
+
+            data.remarks ?? null,
+          ]
+        );
+
+      /**
+       * ==========================================
+       * COMMIT
+       * ==========================================
+       */
+      await connection.commit();
+
+      /**
+       * IMPORTANT:
+       *
+       * findById uses the pool, so call it
+       * AFTER commit.
+       */
+      return this.findById(
+        result.insertId
+      );
+
+    } catch (error) {
+
+      /**
+       * ==========================================
+       * ROLLBACK
+       * ==========================================
+       */
+      await connection.rollback();
+
+      throw error;
+
+    } finally {
+
+      /**
+       * ==========================================
+       * RELEASE CONNECTION
+       * ==========================================
+       */
+      connection.release();
+    }
   }
 
   /**
    * Reservation Details
-   *
-   * Used for authenticated/internal reservation details.
    */
   async findById(id: number) {
-    const [rows]: any = await pool.query(
-      `
-      SELECT
-        r.*,
 
-        c.name AS court_name,
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          r.*,
 
-        CASE
-          WHEN r.user_id IS NOT NULL THEN
-            CONCAT(
-              u.first_name,
-              ' ',
-              u.last_name
-            )
-          ELSE
-            r.guest_name
-        END AS player_name
+          c.name AS court_name,
 
-      FROM reservations r
+          CASE
+            WHEN r.user_id IS NOT NULL THEN
+              CONCAT(
+                u.first_name,
+                ' ',
+                u.last_name
+              )
+            ELSE
+              r.guest_name
+          END AS player_name
 
-      INNER JOIN courts c
-        ON c.id = r.court_id
+        FROM reservations r
 
-      LEFT JOIN users u
-        ON u.id = r.user_id
+        INNER JOIN courts c
+          ON c.id = r.court_id
 
-      WHERE r.id = ?
+        LEFT JOIN users u
+          ON u.id = r.user_id
 
-      LIMIT 1
-      `,
-      [id]
-    );
+        WHERE r.id = ?
+
+        LIMIT 1
+        `,
+        [id]
+      );
 
     return rows[0];
   }
@@ -204,19 +314,22 @@ export class ReservationRepository {
   /**
    * Player Reservations
    */
-  async findUserReservations(userId: number) {
-    const [rows]: any = await pool.query(
-      `
-      SELECT
-        *
-      FROM reservations
-      WHERE user_id = ?
-      ORDER BY
-        reservation_date DESC,
-        start_time DESC
-      `,
-      [userId]
-    );
+  async findUserReservations(
+    userId: number
+  ) {
+
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT *
+        FROM reservations
+        WHERE user_id = ?
+        ORDER BY
+          reservation_date DESC,
+          start_time DESC
+        `,
+        [userId]
+      );
 
     return rows;
   }
@@ -225,37 +338,39 @@ export class ReservationRepository {
    * All Reservations
    */
   async findAll() {
-    const [rows]: any = await pool.query(
-      `
-      SELECT
-        r.*,
 
-        c.name AS court_name,
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          r.*,
 
-        CASE
-          WHEN r.user_id IS NOT NULL THEN
-            CONCAT(
-              u.first_name,
-              ' ',
-              u.last_name
-            )
-          ELSE
-            r.guest_name
-        END AS player_name
+          c.name AS court_name,
 
-      FROM reservations r
+          CASE
+            WHEN r.user_id IS NOT NULL THEN
+              CONCAT(
+                u.first_name,
+                ' ',
+                u.last_name
+              )
+            ELSE
+              r.guest_name
+          END AS player_name
 
-      INNER JOIN courts c
-        ON c.id = r.court_id
+        FROM reservations r
 
-      LEFT JOIN users u
-        ON u.id = r.user_id
+        INNER JOIN courts c
+          ON c.id = r.court_id
 
-      ORDER BY
-        reservation_date DESC,
-        start_time DESC
-      `
-    );
+        LEFT JOIN users u
+          ON u.id = r.user_id
+
+        ORDER BY
+          reservation_date DESC,
+          start_time DESC
+        `
+      );
 
     return rows;
   }
@@ -263,7 +378,10 @@ export class ReservationRepository {
   /**
    * Cancel Reservation
    */
-  async cancelReservation(id: number) {
+  async cancelReservation(
+    id: number
+  ) {
+
     await pool.query(
       `
       UPDATE reservations
@@ -284,6 +402,7 @@ export class ReservationRepository {
     reservationStatus: string,
     paymentStatus: string
   ) {
+
     await pool.query(
       `
       UPDATE reservations
@@ -302,38 +421,36 @@ export class ReservationRepository {
 
   /**
    * Public Reservation Lookup
-   *
-   * IMPORTANT:
-   * Do NOT use SELECT * here.
-   *
-   * This endpoint is public because guests can view
-   * their reservation using the UUID.
    */
-  async getByUuid(uuid: string) {
-  const [rows]: any = await pool.query(
-    `
-    SELECT
-      r.uuid,
-      r.reservation_no,
-      r.reservation_date,
-      r.start_time,
-      r.end_time,
-      r.reservation_status,
-      r.payment_status,
-      c.name AS court_name
+  async getByUuid(
+    uuid: string
+  ) {
 
-    FROM reservations r
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          r.uuid,
+          r.reservation_no,
+          r.reservation_date,
+          r.start_time,
+          r.end_time,
+          r.reservation_status,
+          r.payment_status,
+          c.name AS court_name
 
-    INNER JOIN courts c
-      ON c.id = r.court_id
+        FROM reservations r
 
-    WHERE r.uuid = ?
+        INNER JOIN courts c
+          ON c.id = r.court_id
 
-    LIMIT 1
-    `,
-    [uuid]
-  );
+        WHERE r.uuid = ?
 
-  return rows[0] ?? null;
-}
+        LIMIT 1
+        `,
+        [uuid]
+      );
+
+    return rows[0] ?? null;
+  }
 }

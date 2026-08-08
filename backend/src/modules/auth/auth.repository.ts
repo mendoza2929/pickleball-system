@@ -4,7 +4,19 @@ import { RegisterInput } from "./auth.validator";
 export class AuthRepository {
   async findByEmail(email: string) {
     const [rows]: any = await pool.query(
-      `SELECT * FROM users WHERE email = ? LIMIT 1`,
+      `
+      SELECT
+        u.*,
+        r.id AS role_id,
+        r.name AS role_name
+      FROM users u
+      LEFT JOIN user_roles ur
+        ON ur.user_id = u.id
+      LEFT JOIN roles r
+        ON r.id = ur.role_id
+      WHERE u.email = ?
+      LIMIT 1
+      `,
       [email]
     );
 

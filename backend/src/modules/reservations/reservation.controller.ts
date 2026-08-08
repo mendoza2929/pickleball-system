@@ -66,23 +66,29 @@ export class ReservationController {
   /**
    * GET /api/reservations/:id
    */
-      getById = asyncHandler(
-      async (req: AuthRequest, res: Response) => {
-        const id = Number(req.params.id);
+     getById = asyncHandler(
+        async (
+          req: AuthRequest,
+          res: Response
+        ) => {
 
-        const reservation =
-          await this.reservationService.getById(
-            id,
-            req.user!.id
+          const id =
+            Number(req.params.id);
+
+          const reservation =
+            await this.reservationService.getById(
+              id,
+              req.user!.id,
+              req.user!.role_name
+            );
+
+          return ApiResponse.success(
+            res,
+            reservation,
+            "Reservation retrieved successfully."
           );
-
-        return ApiResponse.success(
-          res,
-          reservation,
-          "Reservation retrieved successfully."
-        );
-      }
-    );
+        }
+      );
 
     getByUuid = asyncHandler(async (req: Request, res: Response) => {
       const uuid = req.params.uuid as string;

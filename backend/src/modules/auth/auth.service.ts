@@ -1,87 +1,242 @@
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
+
 import { AuthRepository } from "./auth.repository";
-import { RegisterInput } from "./auth.validator";
-import { LoginInput } from "./auth.validator";
+
+import {
+  RegisterInput,
+  LoginInput,
+} from "./auth.validator";
+
 import { ROLES } from "../../constants/roles";
+
 import { ConflictError } from "../../shared/errors/ConflictError";
 import { UnauthorizedError } from "../../shared/errors/UnauthorizedError";
+import { ForbiddenError } from "../../shared/errors/ForbiddenError";
+
 import { generateAccessToken } from "../../shared/utils/jwt";
+
 
 export class AuthService {
   private authRepository = new AuthRepository();
 
+
+  // =========================================================
+  // REGISTER
+  // =========================================================
+
   async register(data: RegisterInput) {
-    // 1. Check email
-    const emailExists = await this.authRepository.findByEmail(data.email);
+
+    // -------------------------------------------------------
+    // 1. Check Email
+    // -------------------------------------------------------
+
+    const emailExists =
+      await this.authRepository.findByEmail(
+        data.email
+      );
 
     if (emailExists) {
-      throw new ConflictError("Email already exists.");
+      throw new ConflictError(
+        "Email already exists."
+      );
     }
 
-    // 2. Check username
-    const usernameExists = await this.authRepository.findByUsername(data.username);
+
+    // -------------------------------------------------------
+    // 2. Check Username
+    // -------------------------------------------------------
+
+    const usernameExists =
+      await this.authRepository.findByUsername(
+        data.username
+      );
 
     if (usernameExists) {
-      throw new Error("Username already exists.");
+      throw new ConflictError(
+        "Username already exists."
+      );
     }
 
-    // 3. Hash password
-    const passwordHash = await bcrypt.hash(data.password, 10);
 
+    // -------------------------------------------------------
+    // 3. Hash Password
+    // -------------------------------------------------------
+
+    const passwordHash =
+      await bcrypt.hash(
+        data.password,
+        10
+      );
+
+
+    // -------------------------------------------------------
     // 4. Generate UUID
-    const uuid = randomUUID();
+    // -------------------------------------------------------
 
-    // 5. Save user
-    const userId = await this.authRepository.createUser({
-      ...data,
-      uuid,
-      passwordHash,
-    });
+    const uuid =
+      randomUUID();
 
-    // 6. Assign Player role
-    await this.authRepository.assignRole(userId, ROLES.PLAYER);
+
+    // -------------------------------------------------------
+    // 5. Create User
+    // -------------------------------------------------------
+
+    const userId =
+      await this.authRepository.createUser({
+        ...data,
+        uuid,
+        passwordHash,
+      });
+
+
+    // -------------------------------------------------------
+    // 6. Assign Player Role
+    // -------------------------------------------------------
+
+    await this.authRepository.assignRole(
+      userId,
+      ROLES.PLAYER
+    );
+
 
     return {
       id: userId,
+
       uuid,
-      message: "User registered successfully.",
+
+      message:
+        "User registered successfully.",
     };
   }
 
-    async login(data: LoginInput) {
-      const user = await this.authRepository.findByEmail(data.email);
 
-      if (!user) {
-          throw new UnauthorizedError("Invalid email or password.");
-      }
+  // =========================================================
+  // LOGIN
+  // =========================================================
 
-      const validPassword = await bcrypt.compare(
-          data.password,
-          user.password_hash
+  async login(data: LoginInput) {
+
+    // -------------------------------------------------------
+    // 1. Find User
+    // -------------------------------------------------------
+
+    const user =
+      await this.authRepository.findByEmail(
+        data.email
       );
 
-      if (!validPassword) {
-          throw new UnauthorizedError("Invalid email or password.");
-      }
 
-      const accessToken = generateAccessToken({
-          id: user.id,
-          uuid: user.uuid,
-          email: user.email,
+    // -------------------------------------------------------
+    // 2. Check User
+    // -------------------------------------------------------
+
+    if (!user) {
+      throw new UnauthorizedError(
+        "Invalid email or password."
+      );
+    }
+
+
+    // -------------------------------------------------------
+    // 3. Check Password
+    // -------------------------------------------------------
+
+    const validPassword =
+      await bcrypt.compare(
+        data.password,
+        user.password_hash
+      );
+
+
+    if (!validPassword) {
+      throw new UnauthorizedError(
+        "Invalid email or password."
+      );
+    }
+
+
+    // =======================================================
+    // 4. ADMIN PORTAL ROLE CHECK
+    // =======================================================
+
+    const allowedRoles = [
+      "Owner",
+      "Admin",
+    ];
+
+
+    if (
+      !allowedRoles.includes(
+        user.role_name
+      )
+    ) {
+      throw new ForbiddenError(
+        "You do not have permission to access the admin portal."
+      );
+    }
+
+
+    // =======================================================
+    // 5. GENERATE ACCESS TOKEN
+    // =======================================================
+
+    const accessToken =
+      generateAccessToken({
+        id: user.id,
+
+        uuid: user.uuid,
+
+        email: user.email,
+
+        role_id:
+          user.role_id,
+
+        role_name:
+          user.role_name,
       });
 
-      await this.authRepository.updateLastLogin(user.id);
 
-      return {
-          accessToken,
-          user: {
-              id: user.id,
-              uuid: user.uuid,
-              first_name: user.first_name,
-              last_name: user.last_name,
-              email: user.email,
-          },
-      };
+    // -------------------------------------------------------
+    // 6. Update Last Login
+    // -------------------------------------------------------
+
+    await this.authRepository.updateLastLogin(
+      user.id
+    );
+
+
+    // =======================================================
+    // 7. RETURN LOGIN RESPONSE
+    // =======================================================
+
+    return {
+      accessToken,
+
+      user: {
+        id: user.id,
+
+        uuid:
+          user.uuid,
+
+        first_name:
+          user.first_name,
+
+        last_name:
+          user.last_name,
+
+        username:
+          user.username,
+
+        email:
+          user.email,
+
+        role_id:
+          user.role_id,
+
+        role_name:
+          user.role_name,
+      },
+    };
   }
 }

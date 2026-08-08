@@ -1,8 +1,21 @@
 import jwt from "jsonwebtoken";
-import { env } from "../../config/env";
 
-export function generateAccessToken(payload: object) {
-  return jwt.sign(payload, env.JWT_SECRET, {
-    expiresIn: "1d",
-  });
+interface AccessTokenPayload {
+  id: number;
+  uuid: string;
+  email: string;
+  role_id: number;
+  role_name: string;
+}
+
+export function generateAccessToken(
+  payload: AccessTokenPayload
+) {
+  return jwt.sign(
+    payload,
+    process.env.JWT_SECRET!,
+    {
+      expiresIn: "1d",
+    }
+  );
 }
