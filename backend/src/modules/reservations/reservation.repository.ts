@@ -457,4 +457,31 @@ export class ReservationRepository {
 
     return rows[0] ?? null;
   }
+
+  async findReservationsByCourtAndDate(
+    courtId: number,
+    reservationDate: string
+  ) {
+    const [rows]: any = await pool.query(
+      `
+      SELECT
+        id,
+        start_time,
+        end_time,
+        reservation_status
+      FROM reservations
+      WHERE court_id = ?
+        AND reservation_date = ?
+        AND reservation_status != 'Cancelled'
+      ORDER BY
+        start_time ASC
+      `,
+      [
+        courtId,
+        reservationDate,
+      ]
+    );
+
+    return rows;
+  }
 }

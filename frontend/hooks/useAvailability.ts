@@ -4,13 +4,15 @@ import { availabilityService } from "@/services/availability.service";
 
 export function useAvailability(
   courtId: number | null,
-  date: string | null
+  date: string | null,
+  durationHours: number = 1
 ) {
   return useQuery({
     queryKey: [
       "availability",
       courtId,
       date,
+      durationHours,
     ],
 
     enabled:
@@ -20,7 +22,8 @@ export function useAvailability(
     queryFn: () =>
       availabilityService.getAvailability(
         courtId!,
-        date!
+        date!,
+        durationHours
       ),
   });
 }

@@ -16,11 +16,16 @@ import {
   User,
   X,
 } from "lucide-react";
-
 import {
+  getCourts,
+  type Court,
+} from "@/lib/api/courts";
+import {
+  createWalkInReservation,
   getReservations,
   updateReservation,
 } from "@/lib/api/reservations";
+import WalkInReservationModal from "./WalkInReservationModal";
 
 // ============================================================
 // TYPES
@@ -261,6 +266,9 @@ export default function ReservationsPage() {
     showFilters,
     setShowFilters,
   ] = useState(false);
+  const [courts, setCourts] =
+    useState<Court[]>([]);
+  const [showWalkIn, setShowWalkIn] = useState(false);
 
   const [editReservationStatus, setEditReservationStatus] =
   useState<ReservationStatus>("Pending");
@@ -310,14 +318,169 @@ export default function ReservationsPage() {
     };
   }, []);
 
-  // ==========================================================
-  // FILTERED RESERVATIONS
-  // ==========================================================
+  useEffect(() => {
+    const loadCourts = async () => {
+      try {
+        const data = await getCourts();
 
- // ==========================================================
-// FILTERED + SORTED RESERVATIONS
-// ==========================================================
+        setCourts(data);
+      } catch (error) {
+        console.error(
+          "Failed to load courts:",
+          error
+        );
 
+        setCourts([]);
+      }
+    };
+
+    loadCourts();
+  }, []);
+
+  const [walkInForm, setWalkInForm] = useState({
+      guest_name: "",
+      guest_phone: "",
+      court_id: "",
+      reservation_date: "",
+      start_time: "",
+      end_time: "",
+      remarks: "",
+    });
+
+
+  const [savingWalkIn, setSavingWalkIn] =
+    useState(false);
+
+  const [walkInError, setWalkInError] =
+    useState("");
+
+  const handleCreateWalkIn = async () => {
+  setWalkInError("");
+
+  if (!walkInForm.guest_name.trim()) {
+    setWalkInError("Customer name is required.");
+    return;
+  }
+
+  if (!walkInForm.guest_phone.trim()) {
+    setWalkInError("Phone number is required.");
+    return;
+  }
+
+  if (!walkInForm.court_id) {
+    setWalkInError("Please select a court.");
+    return;
+  }
+
+  if (!walkInForm.reservation_date) {
+    setWalkInError("Please select a date.");
+    return;
+  }
+
+  if (!walkInForm.start_time) {
+    setWalkInError("Please select a start time.");
+    return;
+  }
+
+  if (!walkInForm.end_time) {
+    setWalkInError("Please select an end time.");
+    return;
+  }
+
+  if (
+    walkInForm.end_time <=
+    walkInForm.start_time
+  ) {
+    setWalkInError(
+      "End time must be greater than start time."
+    );
+    return;
+  }
+
+  try {
+    setSavingWalkIn(true);
+
+    const reservation =
+      await createWalkInReservation({
+        court_id: Number(
+          walkInForm.court_id
+        ),
+
+        reservation_date:
+          walkInForm.reservation_date,
+
+        start_time:
+          walkInForm.start_time,
+
+        end_time:
+          walkInForm.end_time,
+
+        guest_name:
+          walkInForm.guest_name.trim(),
+
+        guest_phone:
+          walkInForm.guest_phone.trim(),
+
+        remarks:
+          walkInForm.remarks.trim() ||
+          undefined,
+      });
+
+    // Add the new reservation to the table
+    setReservations((current) => [
+      reservation,
+      ...current,
+    ]);
+
+    // Reset form
+    setWalkInForm({
+      guest_name: "",
+      guest_phone: "",
+      court_id: "",
+      reservation_date: "",
+      start_time: "",
+      end_time: "",
+      remarks: "",
+    });
+
+    setShowWalkIn(false);
+  } catch (error: any) {
+    console.error(
+      "Failed to create walk-in reservation:",
+      error
+    );
+
+    setWalkInError(
+      error?.response?.data?.message ||
+        "Failed to create walk-in reservation."
+    );
+  } finally {
+    setSavingWalkIn(false);
+  }
+};
+
+const handleCloseWalkIn = () => {
+  if (savingWalkIn) return;
+
+  setShowWalkIn(false);
+
+  setWalkInError("");
+
+  setWalkInForm({
+    guest_name: "",
+    guest_phone: "",
+    court_id: "",
+    reservation_date: "",
+    start_time: "",
+    end_time: "",
+    remarks: "",
+  });
+};
+
+  // ==========================================================
+  // FILTERED + SORTED RESERVATIONS
+  // ==========================================================
+      
   const filteredReservations = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -524,29 +687,57 @@ export default function ReservationsPage() {
         {/* HEADER */}
         {/* ================================================== */}
 
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
+            <span>Admin</span>
 
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-              <span>Admin</span>
+            <ChevronRight className="h-3 w-3" />
 
-              <ChevronRight className="h-3 w-3" />
-
-              <span className="font-medium text-slate-600">
-                Reservations
-              </span>
-            </div>
-
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            <span className="font-medium text-slate-600">
               Reservations
-            </h1>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Manage and review all court reservations.
-            </p>
+            </span>
           </div>
 
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Reservations
+          </h1>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Manage and review all court reservations.
+          </p>
         </div>
+
+        {/* Walk-in Reservation */}
+            <button
+        type="button"
+        onClick={() => {
+          setWalkInError("");
+          setShowWalkIn(true);
+        }}
+        className="
+          inline-flex
+          h-11
+          items-center
+          justify-center
+          gap-2
+          rounded-xl
+          bg-slate-900
+          px-5
+          text-sm
+          font-medium
+          text-white
+          transition
+          hover:bg-slate-800
+        "
+      >
+        <span className="text-lg leading-none">
+          +
+        </span>
+
+        Walk-in Reservation
+      </button>
+      </div>
 
         {/* ================================================== */}
         {/* SUMMARY */}
@@ -1270,13 +1461,19 @@ export default function ReservationsPage() {
 
                             <td className="px-3 py-4">
 
-                              <button
+                             <button
                                 type="button"
-                                onClick={() =>
-                                  setSelectedReservation(
-                                    reservation
-                                  )
-                                }
+                                onClick={() => {
+                                  setSelectedReservation(reservation);
+
+                                  setEditReservationStatus(
+                                    reservation.reservation_status
+                                  );
+
+                                  setEditPaymentStatus(
+                                    reservation.payment_status
+                                  );
+                                }}
                                 className="
                                   flex
                                   h-8
@@ -1758,6 +1955,24 @@ export default function ReservationsPage() {
         </>
       )}
 
+    <WalkInReservationModal
+        open={showWalkIn}
+        onClose={() => setShowWalkIn(false)}
+        onCreated={async () => {
+          try {
+            const data = await getReservations();
+            setReservations(data);
+          } catch (error) {
+            console.error(
+              "Failed to refresh reservations:",
+              error
+            );
+          }
+        }}
+      />
     </div>
+    
   );
+
+  
 }

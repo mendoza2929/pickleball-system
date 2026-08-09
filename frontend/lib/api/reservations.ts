@@ -41,6 +41,10 @@ export interface Reservation {
   updated_at?: string;
 }
 
+// ============================================================
+// API RESPONSE TYPES
+// ============================================================
+
 interface ReservationsResponse {
   success: boolean;
   message: string;
@@ -53,7 +57,46 @@ interface ReservationResponse {
   data: Reservation;
 }
 
-export async function getReservations(): Promise<Reservation[]> {
+// ============================================================
+// WALK-IN RESERVATION
+// ============================================================
+
+export interface CreateWalkInReservationPayload {
+  court_id: number;
+  reservation_date: string;
+  start_time: string;
+  end_time: string;
+
+  guest_name: string;
+  guest_phone: string;
+
+  remarks?: string;
+}
+
+// ============================================================
+// UPDATE RESERVATION STATUS
+// ============================================================
+
+export interface UpdateReservationPayload {
+  reservation_status:
+    | "Pending"
+    | "Confirmed"
+    | "Cancelled"
+    | "Completed";
+
+  payment_status:
+    | "Unpaid"
+    | "Partial"
+    | "Paid";
+}
+
+// ============================================================
+// GET ALL RESERVATIONS
+// ============================================================
+
+export async function getReservations(): Promise<
+  Reservation[]
+> {
   const response =
     await api.get<ReservationsResponse>(
       "/reservations"
@@ -63,13 +106,24 @@ export async function getReservations(): Promise<Reservation[]> {
 }
 
 // ============================================================
-// UPDATE RESERVATION STATUS / PAYMENT STATUS
+// CREATE WALK-IN RESERVATION
 // ============================================================
 
-export interface UpdateReservationPayload {
-  reservation_status?: Reservation["reservation_status"];
-  payment_status?: Reservation["payment_status"];
+export async function createWalkInReservation(
+  payload: CreateWalkInReservationPayload
+): Promise<Reservation> {
+  const response =
+    await api.post<ReservationResponse>(
+      "/reservations/walk-in",
+      payload
+    );
+
+  return response.data.data;
 }
+
+// ============================================================
+// UPDATE RESERVATION STATUS + PAYMENT STATUS
+// ============================================================
 
 export async function updateReservation(
   id: number,
@@ -77,8 +131,55 @@ export async function updateReservation(
 ): Promise<Reservation> {
   const response =
     await api.patch<ReservationResponse>(
-       `/reservations/${id}/status`,
+      `/reservations/${id}/status`,
       payload
+    );
+
+  return response.data.data;
+}
+
+// ============================================================
+// RESERVATION AVAILABILITY
+// ============================================================
+
+export interface AvailableSlot {
+  start_time: string;
+  end_time: string;
+}
+
+export interface ReservationAvailability {
+  court_id: number;
+  court_name: string;
+  reservation_date: string;
+  day_of_week: string;
+  duration_hours: number;
+  is_closed: boolean;
+  open_time: string | null;
+  close_time: string | null;
+  available_slots: AvailableSlot[];
+}
+
+interface AvailabilityResponse {
+  success: boolean;
+  message: string;
+  data: ReservationAvailability;
+}
+
+export async function getReservationAvailability(
+  courtId: number,
+  reservationDate: string,
+  durationHours: number = 1
+): Promise<ReservationAvailability> {
+  const response =
+    await api.get<AvailabilityResponse>(
+      "/reservations/availability",
+      {
+        params: {
+          court_id: courtId,
+          reservation_date: reservationDate,
+          duration_hours: durationHours,
+        },
+      }
     );
 
   return response.data.data;

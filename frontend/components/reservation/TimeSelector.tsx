@@ -1,19 +1,31 @@
 "use client";
 
-import { CheckCircle2, Clock } from "lucide-react";
+import { CheckCircle2, Clock, Loader2 } from "lucide-react";
+
 import { formatTime } from "@/utils/time";
 import { useAvailability } from "@/hooks/useAvailability";
+
 function formatLocalDate(date: Date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
+
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
+
 interface Props {
   courtId: number;
+
   date: Date;
+
   selectedTime: string | null;
+
   onSelect: (
     start: string,
     end: string
@@ -26,7 +38,8 @@ export default function TimeSelector({
   selectedTime,
   onSelect,
 }: Props) {
- const formattedDate = formatLocalDate(date);
+  const formattedDate =
+    formatLocalDate(date);
 
   const {
     data,
@@ -37,134 +50,160 @@ export default function TimeSelector({
     formattedDate
   );
 
+  // ============================================================
+  // LOADING
+  // ============================================================
+
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3, 4].map((item) => (
-          <div
-            key={item}
-            className="h-28 animate-pulse rounded-2xl bg-slate-800"
-          />
-        ))}
+      <div className="flex min-h-[240px] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-7 w-7 animate-spin text-lime-400" />
+
+          <p className="text-sm text-slate-400">
+            Checking available times...
+          </p>
+        </div>
       </div>
     );
   }
+
+  // ============================================================
+  // ERROR
+  // ============================================================
 
   if (isError) {
     return (
-      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
-        Unable to load available time slots.
+      <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-center">
+        <p className="text-sm text-red-300">
+          Unable to load available time slots.
+        </p>
       </div>
     );
   }
 
-  if (!data?.slots.length) {
+  // ============================================================
+  // COURT CLOSED / NO AVAILABLE SLOTS
+  // ============================================================
+
+  if (
+    !data ||
+    data.is_closed ||
+    !data.available_slots?.length
+  ) {
     return (
-      <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-6">
-        Court is closed on this day.
+      <div>
+        <div>
+          <h2 className="text-3xl font-bold">
+            Select Time
+          </h2>
+
+          <p className="mt-2 text-slate-400">
+            Choose an available time slot.
+          </p>
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/40 p-8 text-center">
+          <Clock className="mx-auto h-8 w-8 text-slate-500" />
+
+          <p className="mt-4 text-sm text-slate-400">
+            No available time slots for this date.
+          </p>
+        </div>
       </div>
     );
   }
+
+  // ============================================================
+  // AVAILABLE SLOTS
+  // ============================================================
 
   return (
-    <div className="space-y-8">
-
+    <div>
       <div>
+        <p className="text-sm font-medium uppercase tracking-wider text-lime-400">
+          Available Times
+        </p>
 
-        <h2 className="text-3xl font-bold">
-
+        <h2 className="mt-2 text-3xl font-bold">
           Select Time
-
         </h2>
 
         <p className="mt-2 text-slate-400">
-
           Choose an available time slot.
-
         </p>
-
       </div>
 
-      <div className="grid gap-5 md:grid-cols-3">
+      <div className="mt-8 grid gap-5 md:grid-cols-3">
+        {data.available_slots.map(
+          (slot) => {
+            const active =
+              selectedTime ===
+              slot.start_time;
 
-        {data.slots.map((slot) => {
-
-          const active =
-            selectedTime === slot.start;
-
-          return (
-            <button
-              key={slot.start}
-              disabled={!slot.available}
-              onClick={() =>
-                onSelect(
-                  slot.start,
-                  slot.end
-                )
-              }
-              className={`
-                rounded-2xl
-                border
-                p-6
-                text-left
-                transition-all
-
-                ${
-                  active
-                    ? "border-lime-400 bg-lime-400/10"
-                    : "border-white/10 bg-slate-900"
+            return (
+              <button
+                key={`${slot.start_time}-${slot.end_time}`}
+                type="button"
+                onClick={() =>
+                  onSelect(
+                    slot.start_time,
+                    slot.end_time
+                  )
                 }
+                className={`
+                  rounded-2xl
+                  border
+                  p-6
+                  text-left
+                  transition-all
+                  ${
+                    active
+                      ? "border-lime-400 bg-lime-400/10"
+                      : "border-white/10 bg-slate-900 hover:border-lime-400/40 hover:bg-slate-800"
+                  }
+                `}
+              >
+                <div className="flex items-center justify-between">
+                  <Clock
+                    className={
+                      active
+                        ? "text-lime-400"
+                        : "text-slate-400"
+                    }
+                  />
 
-                ${
-                  !slot.available &&
-                  "cursor-not-allowed opacity-40"
-                }
-              `}
-            >
-              <div className="flex items-center justify-between">
+                  {active && (
+                    <CheckCircle2 className="text-lime-400" />
+                  )}
+                </div>
 
-                <Clock className="text-lime-400" />
-
-                {active && (
-                  <CheckCircle2 className="text-lime-400" />
-                )}
-
-              </div>
-
-              <h3 className="mt-6 text-xl font-bold">
-
-                 {formatTime(slot.start)}
-
-              </h3>
-
-              <p className="mt-2 text-slate-400">
+                <h3 className="mt-6 text-xl font-bold">
+                  {formatTime(
+                    slot.start_time
+                  )}
+                </h3>
 
                 <p className="mt-2 text-slate-400">
-  {formatTime(slot.start)} - {formatTime(slot.end)}
-</p>
+                  {formatTime(
+                    slot.start_time
+                  )}{" "}
+                  -{" "}
+                  {formatTime(
+                    slot.end_time
+                  )}
+                </p>
 
-              </p>
-
-              <div className="mt-6">
-
-                {slot.available ? (
+                <div className="mt-6">
                   <span className="rounded-full bg-lime-400/20 px-3 py-1 text-sm text-lime-300">
                     Available
                   </span>
-                ) : (
-                  <span className="rounded-full bg-red-500/20 px-3 py-1 text-sm text-red-300">
-                    Reserved
-                  </span>
-                )}
-
-              </div>
-
-            </button>
-          );
-        })}
-
+                </div>
+              </button>
+            );
+          }
+        )}
       </div>
-
     </div>
   );
 }

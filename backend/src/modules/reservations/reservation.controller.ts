@@ -7,6 +7,7 @@ import { ApiResponse } from "../../utils/apiResponse";
 import { ReservationService } from "./reservation.service";
 import {
   createReservationSchema,
+  createWalkInReservationSchema,
 } from "./reservation.validator";
 
 export class ReservationController {
@@ -174,6 +175,27 @@ export class ReservationController {
         res,
         reservation,
         "Reservation status updated successfully."
+      );
+    }
+  );
+
+  createWalkIn = asyncHandler(
+    async (req: AuthRequest, res: Response) => {
+      const data =
+        createWalkInReservationSchema.parse(
+          req.body
+        );
+
+      const reservation =
+        await this.reservationService.createWalkIn(
+          data
+        );
+
+      return ApiResponse.success(
+        res,
+        reservation,
+        "Walk-in reservation created successfully.",
+        201
       );
     }
   );

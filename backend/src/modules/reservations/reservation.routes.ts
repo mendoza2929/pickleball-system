@@ -6,12 +6,12 @@ import { authenticate } from "../../middleware/authenticate";
 import { optionalAuthenticate } from "../../middleware/optionalAuthenticate";
 import { authorizeAdmin } from "../../middleware/authorizeAdmin";
 
+import availabilityRoutes from "./availability/routes";
 
 const router = Router();
 
 const reservationController =
   new ReservationController();
-
 
 // =====================================================
 // CREATE RESERVATION
@@ -25,6 +25,17 @@ router.post(
   reservationController.create
 );
 
+// =====================================================
+// RESERVATION AVAILABILITY
+// =====================================================
+// IMPORTANT:
+// This MUST come before /:id
+// =====================================================
+
+router.use(
+  "/availability",
+  availabilityRoutes
+);
 
 // =====================================================
 // MY RESERVATIONS
@@ -38,7 +49,6 @@ router.get(
   reservationController.getMyReservations
 );
 
-
 // =====================================================
 // PUBLIC RESERVATION LOOKUP
 // =====================================================
@@ -49,7 +59,6 @@ router.get(
   "/uuid/:uuid",
   reservationController.getByUuid
 );
-
 
 // =====================================================
 // ALL RESERVATIONS
@@ -64,13 +73,8 @@ router.get(
   reservationController.getAll
 );
 
-
 // =====================================================
 // RESERVATION DETAILS
-// =====================================================
-// Keep this as normal authentication for now.
-// We will update the service next so Admin can
-// view any reservation.
 // =====================================================
 
 router.get(
@@ -79,11 +83,8 @@ router.get(
   reservationController.getById
 );
 
-
 // =====================================================
 // CANCEL RESERVATION
-// =====================================================
-// Reservation owner
 // =====================================================
 
 router.patch(
@@ -92,6 +93,9 @@ router.patch(
   reservationController.cancel
 );
 
+// =====================================================
+// UPDATE RESERVATION STATUS
+// =====================================================
 
 router.patch(
   "/:id/status",
@@ -100,5 +104,15 @@ router.patch(
   reservationController.updateStatus
 );
 
+// =====================================================
+// WALK-IN RESERVATION
+// =====================================================
+
+router.post(
+  "/walk-in",
+  authenticate,
+  authorizeAdmin,
+  reservationController.createWalkIn
+);
 
 export default router;

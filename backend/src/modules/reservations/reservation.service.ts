@@ -3,6 +3,7 @@ import { CourtRepository } from "../courts/court.repository";
 
 import {
   CreateReservationInput,
+  CreateWalkInReservationInput,
 } from "./reservation.validator";
 
 import { calculateHours } from "../../shared/utils/dateTime";
@@ -43,10 +44,15 @@ export class ReservationService {
   /**
    * Create Reservation
    */
-  async create(
-    userId: number | null,
-    data: CreateReservationInput
-  ) {
+    async create(
+      userId: number | null,
+      data: CreateReservationInput,
+      options?: {
+        reservationStatus?: string;
+        paymentStatus?: string;
+        isWalkIn?: boolean;
+      }
+    ) {
 
     // ---------------------------------------------------
     // Court Exists
@@ -68,8 +74,7 @@ export class ReservationService {
     // Guest Validation
     // ---------------------------------------------------
 
-    if (!userId) {
-
+    if (!userId && !options?.isWalkIn) {
       if (
         !data.guest_name ||
         !data.guest_email ||
@@ -262,11 +267,13 @@ export class ReservationService {
             remarks:
               data.remarks,
 
-            reservation_status:
-              RESERVATION_STATUS.PENDING,
+           reservation_status:
+            options?.reservationStatus ??
+            RESERVATION_STATUS.PENDING,
 
-            payment_status:
-              PAYMENT_STATUS.UNPAID,
+          payment_status:
+            options?.paymentStatus ??
+            PAYMENT_STATUS.UNPAID,
           });
 
     } catch (error: any) {
@@ -547,6 +554,24 @@ async getById(
       id,
       data.reservation_status,
       data.payment_status
+    );
+  }
+
+  async createWalkIn(
+    data: CreateWalkInReservationInput
+  ) {
+    return await this.create(
+      null,
+      data,
+      {
+        isWalkIn: true,
+
+        reservationStatus:
+          RESERVATION_STATUS.CONFIRMED,
+
+        paymentStatus:
+          PAYMENT_STATUS.PAID,
+      }
     );
   }
 }
