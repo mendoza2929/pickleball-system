@@ -148,14 +148,10 @@ export default function WalkInReservationModal({
         const data =
           await getCourts();
 
-        const availableCourts =
-          data.filter(
-            (court) =>
-              court.status ===
-                "Available" ||
-              court.status ===
-                "available"
-          );
+        const availableCourts = data.filter(
+          (court) =>
+            court.status === "Available"
+        );
 
         setCourts(
           availableCourts

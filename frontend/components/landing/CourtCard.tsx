@@ -4,11 +4,13 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 
 import {
-  ArrowRight,
   CheckCircle2,
   CircleDollarSign,
   Hash,
   Layers3,
+  ArrowRight,
+  Wrench,
+  Ban,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +36,16 @@ export default function CourtCard({
   status,
   delay = 0,
 }: CourtCardProps) {
-  const available = status.toUpperCase() === "AVAILABLE";
+  const normalizedStatus = status.toUpperCase();
+
+  const available =
+    normalizedStatus === "AVAILABLE";
+
+  const maintenance =
+    normalizedStatus === "MAINTENANCE";
+
+  const inactive =
+    normalizedStatus === "INACTIVE";
 
   return (
     <motion.div
@@ -70,7 +81,9 @@ export default function CourtCard({
         hover:shadow-[0_25px_70px_rgba(132,255,0,.18)]
       "
     >
-      {/* Hero */}
+      {/* =====================================================
+          HERO
+      ===================================================== */}
 
       <div
         className="
@@ -101,24 +114,28 @@ export default function CourtCard({
           🏓
         </span>
 
+        {/* Court Number */}
+
         <div
           className="
             absolute
             left-5
             top-5
             rounded-full
+            border
+            border-white/10
+            bg-black/40
             px-4
             py-2
             text-sm
             font-semibold
             backdrop-blur-xl
-            border
-            border-white/10
-            bg-black/40
           "
         >
           Court #{court_number}
         </div>
+
+        {/* Status */}
 
         <div
           className={`
@@ -134,7 +151,9 @@ export default function CourtCard({
             ${
               available
                 ? "bg-lime-400 text-slate-950"
-                : "bg-red-500 text-white"
+                : maintenance
+                  ? "bg-orange-500 text-white"
+                  : "bg-red-500 text-white"
             }
           `}
         >
@@ -142,9 +161,13 @@ export default function CourtCard({
         </div>
       </div>
 
-      {/* Content */}
+      {/* =====================================================
+          CONTENT
+      ===================================================== */}
 
       <div className="space-y-6 p-8">
+        {/* Court Name */}
+
         <div>
           <h3 className="text-3xl font-black">
             {name}
@@ -155,7 +178,9 @@ export default function CourtCard({
           </p>
         </div>
 
-        {/* Details */}
+        {/* ===================================================
+            DETAILS
+        =================================================== */}
 
         <div className="space-y-4">
           <div className="flex items-center gap-3 text-slate-300">
@@ -187,12 +212,15 @@ export default function CourtCard({
             />
 
             <span>
-              ₱{hourly_rate} / hour
+              ₱{Number(hourly_rate).toLocaleString()}{" "}
+              / hour
             </span>
           </div>
         </div>
 
-        {/* Description */}
+        {/* ===================================================
+            DESCRIPTION
+        =================================================== */}
 
         <div
           className="
@@ -220,16 +248,21 @@ export default function CourtCard({
           </p>
         </div>
 
-        {/* Footer */}
+        {/* ===================================================
+            FOOTER
+        =================================================== */}
 
         <div className="flex items-center justify-between">
+          {/* PRICE */}
+
           <div>
             <p className="text-sm text-slate-500">
               Hourly Rate
             </p>
 
             <h4 className="text-4xl font-black text-lime-400">
-              ₱{hourly_rate}
+              ₱
+              {Number(hourly_rate).toLocaleString()}
 
               <span className="ml-1 text-lg text-white">
                 /hr
@@ -237,32 +270,92 @@ export default function CourtCard({
             </h4>
           </div>
 
-          <Button
-            className="
-              hero-btn-primary
-              rounded-full
-              px-6
-            "
-            asChild
-          >
-            <Link
-               href={`/reservation?courtId=${id}`}
-              className="group"
-            >
-              Reserve
+          {/* =================================================
+              AVAILABLE
+          ================================================= */}
 
-              <ArrowRight
-                className="
-                  ml-2
-                  h-5
-                  w-5
-                  transition-transform
-                  duration-300
-                  group-hover:translate-x-1
-                "
+          {available && (
+            <Button
+              className="
+                hero-btn-primary
+                rounded-full
+                px-6
+              "
+              asChild
+            >
+              <Link
+                href={`/reservation?courtId=${id}`}
+                className="group"
+              >
+                Reserve
+
+                <ArrowRight
+                  className="
+                    ml-2
+                    h-5
+                    w-5
+                    transition-transform
+                    duration-300
+                    group-hover:translate-x-1
+                  "
+                />
+              </Link>
+            </Button>
+          )}
+
+          {/* =================================================
+              MAINTENANCE
+          ================================================= */}
+
+          {maintenance && (
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+                rounded-full
+                bg-orange-500/10
+                px-5
+                py-3
+                text-sm
+                font-semibold
+                text-orange-300
+              "
+            >
+              <Wrench
+                size={16}
               />
-            </Link>
-          </Button>
+
+              Maintenance
+            </div>
+          )}
+
+          {/* =================================================
+              INACTIVE
+          ================================================= */}
+
+          {inactive && (
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+                rounded-full
+                bg-red-500/10
+                px-5
+                py-3
+                text-sm
+                font-semibold
+                text-red-300
+              "
+            >
+              <Ban
+                size={16}
+              />
+
+              Unavailable
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

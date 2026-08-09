@@ -1,17 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
-import { courtScheduleService } from "../services/courtSchedule.service";
+
+import {
+  getCourtSchedules,
+} from "@/lib/api/courtSchedules";
 
 export function useCourtSchedules(
-    courtId: number | null
+  courtId: number | null
 ) {
-    return useQuery({
-        queryKey: ["court-schedules", courtId],
+  return useQuery({
+    queryKey: [
+      "court-schedules",
+      courtId,
+    ],
 
-        enabled: !!courtId,
+    enabled: !!courtId,
 
-        queryFn: () =>
-            courtScheduleService.getByCourt(
-                courtId!
-            ),
-    });
+    queryFn: () =>
+      getCourtSchedules(courtId!),
+  });
 }

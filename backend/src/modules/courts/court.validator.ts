@@ -1,10 +1,26 @@
 import { z } from "zod";
 
+// ============================================================
+// COURT STATUS
+// ============================================================
+
+export const courtStatusSchema = z.enum([
+  "Available",
+  "Maintenance",
+  "Inactive",
+]);
+
+// ============================================================
+// CREATE COURT
+// ============================================================
+
 export const createCourtSchema = z.object({
   court_number: z
     .number()
     .int()
-    .positive("Court number must be greater than 0."),
+    .positive(
+      "Court number must be greater than 0."
+    ),
 
   name: z
     .string()
@@ -26,10 +42,27 @@ export const createCourtSchema = z.object({
 
   hourly_rate: z
     .number()
-    .min(0, "Hourly rate cannot be negative."),
+    .min(
+      0,
+      "Hourly rate cannot be negative."
+    ),
 });
 
-export const updateCourtSchema = createCourtSchema.partial();
+// ============================================================
+// UPDATE COURT
+// ============================================================
 
-export type CreateCourtInput = z.infer<typeof createCourtSchema>;
-export type UpdateCourtInput = z.infer<typeof updateCourtSchema>;
+export const updateCourtSchema =
+  createCourtSchema.partial().extend({
+    status: courtStatusSchema.optional(),
+  });
+
+// ============================================================
+// TYPES
+// ============================================================
+
+export type CreateCourtInput =
+  z.infer<typeof createCourtSchema>;
+
+export type UpdateCourtInput =
+  z.infer<typeof updateCourtSchema>;

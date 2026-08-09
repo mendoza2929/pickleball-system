@@ -4,23 +4,21 @@ import { PoolConnection } from "mysql2/promise";
 import pool from "../../config/database";
 
 export class ReservationRepository {
-
   /**
+   * =====================================================
    * Generate Reservation Number
+   * =====================================================
    *
-   * NOTE:
-   * We will improve reservation number generation later.
+   * Uses the actual AUTO_INCREMENT reservation ID.
+   *
+   * Example:
+   * ID: 68
+   * Result:
+   * RSV-20260809-000068
    */
   async generateReservationNumber(
-    connection: PoolConnection
+    reservationId: number
   ) {
-    const [rows]: any = await connection.query(`
-      SELECT COALESCE(MAX(id), 0) + 1 AS next_number
-      FROM reservations
-    `);
-
-    const nextNumber = Number(rows[0].next_number);
-
     const date = new Date();
 
     const reservationNo =
@@ -28,16 +26,26 @@ export class ReservationRepository {
       `${date.getFullYear()}` +
       `${String(date.getMonth() + 1).padStart(2, "0")}` +
       `${String(date.getDate()).padStart(2, "0")}-` +
-      `${String(nextNumber).padStart(6, "0")}`;
+      `${String(reservationId).padStart(6, "0")}`;
 
     return reservationNo;
   }
 
   /**
+   * =====================================================
    * Check Time Conflict
+   * =====================================================
    *
    * IMPORTANT:
    * This uses the transaction connection.
+   *
+   * A reservation conflicts when:
+   *
+   * new start < existing end
+   * AND
+   * new end > existing start
+   *
+   * Cancelled reservations are ignored.
    */
   async checkTimeConflict(
     connection: PoolConnection,
@@ -46,32 +54,53 @@ export class ReservationRepository {
     startTime: string,
     endTime: string
   ) {
-    const [rows]: any = await connection.query(
-      `
-      SELECT id
-      FROM reservations
-      WHERE court_id = ?
-        AND reservation_date = ?
-        AND reservation_status != 'Cancelled'
-        AND start_time < ?
-        AND end_time > ?
-      LIMIT 1
-      `,
-      [
-        courtId,
-        reservationDate,
-        endTime,
-        startTime,
-      ]
-    );
+    const [rows]: any =
+      await connection.query(
+        `
+        SELECT id
+        FROM reservations
+        WHERE court_id = ?
+          AND reservation_date = ?
+          AND reservation_status != 'Cancelled'
+          AND start_time < ?
+          AND end_time > ?
+        LIMIT 1
+        `,
+        [
+          courtId,
+          reservationDate,
+          endTime,
+          startTime,
+        ]
+      );
 
     return rows[0] ?? null;
   }
 
   /**
+   * =====================================================
    * Create Reservation
+   * =====================================================
    *
    * Transaction-safe reservation creation.
+   *
+   * Flow:
+   *
+   * BEGIN TRANSACTION
+   *      ↓
+   * LOCK COURT
+   *      ↓
+   * CHECK TIME CONFLICT
+   *      ↓
+   * INSERT RESERVATION
+   *      ↓
+   * GET AUTO_INCREMENT ID
+   *      ↓
+   * GENERATE RESERVATION NUMBER
+   *      ↓
+   * UPDATE RESERVATION NUMBER
+   *      ↓
+   * COMMIT
    */
   async createReservation(data: {
     user_id?: number | null;
@@ -98,24 +127,20 @@ export class ReservationRepository {
       await pool.getConnection();
 
     try {
-
       /**
-       * ==========================================
+       * =================================================
        * START TRANSACTION
-       * ==========================================
+       * =================================================
        */
       await connection.beginTransaction();
 
       /**
-       * ==========================================
+       * =================================================
        * LOCK COURT
-       * ==========================================
+       * =================================================
        *
-       * This is the important part.
-       *
-       * Another request trying to reserve
-       * the same court will wait until this
-       * transaction finishes.
+       * This prevents two simultaneous transactions
+       * from reserving the same court at the same time.
        */
       const [courtRows]: any =
         await connection.query(
@@ -123,6 +148,7 @@ export class ReservationRepository {
           SELECT id
           FROM courts
           WHERE id = ?
+            AND is_deleted = 0
           FOR UPDATE
           `,
           [data.court_id]
@@ -135,9 +161,9 @@ export class ReservationRepository {
       }
 
       /**
-       * ==========================================
+       * =================================================
        * CHECK TIME CONFLICT
-       * ==========================================
+       * =================================================
        */
       const conflict =
         await this.checkTimeConflict(
@@ -155,22 +181,23 @@ export class ReservationRepository {
       }
 
       /**
-       * ==========================================
-       * GENERATE RESERVATION NUMBER
-       * ==========================================
+       * =================================================
+       * GENERATE UUID
+       * =================================================
        */
-      const reservationNo =
-        await this.generateReservationNumber(
-          connection
-        );
-
       const uuid =
         randomUUID();
 
       /**
-       * ==========================================
+       * =================================================
        * INSERT RESERVATION
-       * ==========================================
+       * =================================================
+       *
+       * We temporarily store the UUID as the
+       * reservation number.
+       *
+       * After MySQL gives us the AUTO_INCREMENT ID,
+       * we replace it with the final reservation number.
        */
       const [result]: any =
         await connection.query(
@@ -200,7 +227,9 @@ export class ReservationRepository {
           [
             uuid,
 
-            reservationNo,
+            // Temporary value.
+            // Will be replaced below.
+            "TMP",
 
             data.user_id ?? null,
 
@@ -213,7 +242,6 @@ export class ReservationRepository {
             data.reservation_date,
 
             data.start_time,
-
             data.end_time,
 
             data.total_hours,
@@ -231,49 +259,88 @@ export class ReservationRepository {
         );
 
       /**
-       * ==========================================
+       * =================================================
+       * GET AUTO_INCREMENT ID
+       * =================================================
+       */
+      const reservationId =
+        result.insertId;
+
+      /**
+       * =================================================
+       * GENERATE FINAL RESERVATION NUMBER
+       * =================================================
+       *
+       * Example:
+       *
+       * reservationId = 68
+       *
+       * RSV-20260809-000068
+       */
+      const reservationNo =
+        await this.generateReservationNumber(
+          reservationId
+        );
+
+      /**
+       * =================================================
+       * UPDATE RESERVATION NUMBER
+       * =================================================
+       */
+      await connection.query(
+        `
+        UPDATE reservations
+        SET reservation_no = ?
+        WHERE id = ?
+        `,
+        [
+          reservationNo,
+          reservationId,
+        ]
+      );
+
+      /**
+       * =================================================
        * COMMIT
-       * ==========================================
+       * =================================================
        */
       await connection.commit();
 
       /**
        * IMPORTANT:
        *
-       * findById uses the pool, so call it
-       * AFTER commit.
+       * findById() uses the pool connection.
+       *
+       * Therefore we call it AFTER commit.
        */
       return this.findById(
-        result.insertId
+        reservationId
       );
-
     } catch (error) {
-
       /**
-       * ==========================================
+       * =================================================
        * ROLLBACK
-       * ==========================================
+       * =================================================
        */
       await connection.rollback();
 
       throw error;
-
     } finally {
-
       /**
-       * ==========================================
+       * =================================================
        * RELEASE CONNECTION
-       * ==========================================
+       * =================================================
        */
       connection.release();
     }
   }
 
   /**
+   * =====================================================
    * Reservation Details
+   * =====================================================
    */
   async findById(id: number) {
-
     const [rows]: any =
       await pool.query(
         `
@@ -312,12 +379,13 @@ export class ReservationRepository {
   }
 
   /**
+   * =====================================================
    * Player Reservations
+   * =====================================================
    */
   async findUserReservations(
     userId: number
   ) {
-
     const [rows]: any =
       await pool.query(
         `
@@ -335,10 +403,11 @@ export class ReservationRepository {
   }
 
   /**
+   * =====================================================
    * All Reservations
+   * =====================================================
    */
   async findAll() {
-
     const [rows]: any =
       await pool.query(
         `
@@ -376,16 +445,18 @@ export class ReservationRepository {
   }
 
   /**
+   * =====================================================
    * Cancel Reservation
+   * =====================================================
    */
   async cancelReservation(
     id: number
   ) {
-
     await pool.query(
       `
       UPDATE reservations
-      SET reservation_status = 'Cancelled'
+      SET
+        reservation_status = 'Cancelled'
       WHERE id = ?
       `,
       [id]
@@ -394,9 +465,10 @@ export class ReservationRepository {
     return this.findById(id);
   }
 
-
   /**
+   * =====================================================
    * Update Reservation Status
+   * =====================================================
    */
   async updateStatus(
     reservationId: number,
@@ -424,12 +496,13 @@ export class ReservationRepository {
   }
 
   /**
+   * =====================================================
    * Public Reservation Lookup
+   * =====================================================
    */
   async getByUuid(
     uuid: string
   ) {
-
     const [rows]: any =
       await pool.query(
         `
@@ -458,29 +531,37 @@ export class ReservationRepository {
     return rows[0] ?? null;
   }
 
+  /**
+   * =====================================================
+   * Find Reservations By Court And Date
+   * =====================================================
+   *
+   * Used by availability checking.
+   */
   async findReservationsByCourtAndDate(
     courtId: number,
     reservationDate: string
   ) {
-    const [rows]: any = await pool.query(
-      `
-      SELECT
-        id,
-        start_time,
-        end_time,
-        reservation_status
-      FROM reservations
-      WHERE court_id = ?
-        AND reservation_date = ?
-        AND reservation_status != 'Cancelled'
-      ORDER BY
-        start_time ASC
-      `,
-      [
-        courtId,
-        reservationDate,
-      ]
-    );
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          id,
+          start_time,
+          end_time,
+          reservation_status
+        FROM reservations
+        WHERE court_id = ?
+          AND reservation_date = ?
+          AND reservation_status != 'Cancelled'
+        ORDER BY
+          start_time ASC
+        `,
+        [
+          courtId,
+          reservationDate,
+        ]
+      );
 
     return rows;
   }

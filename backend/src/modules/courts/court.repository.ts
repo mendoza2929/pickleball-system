@@ -8,33 +8,106 @@ import {
 export class CourtRepository {
   /**
    * Create Court
+   *
+   * Creates the court and automatically creates
+   * a default schedule for all 7 days:
+   *
+   * Monday    09:00 - 22:00
+   * Tuesday   09:00 - 22:00
+   * Wednesday 09:00 - 22:00
+   * Thursday  09:00 - 22:00
+   * Friday    09:00 - 22:00
+   * Saturday  09:00 - 22:00
+   * Sunday    09:00 - 22:00
    */
   async createCourt(data: CreateCourtInput) {
-    const uuid = randomUUID();
+    const connection = await pool.getConnection();
 
-    const [result]: any = await pool.query(
-      `
-      INSERT INTO courts (
-        uuid,
-        court_number,
-        name,
-        description,
-        surface_type,
-        hourly_rate
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-      `,
-      [
-        uuid,
-        data.court_number,
-        data.name,
-        data.description ?? null,
-        data.surface_type,
-        data.hourly_rate,
-      ]
-    );
+    try {
+      await connection.beginTransaction();
 
-    return this.findById(result.insertId);
+      // =====================================================
+      // CREATE COURT
+      // =====================================================
+
+      const uuid = randomUUID();
+
+      const [result]: any = await connection.query(
+        `
+        INSERT INTO courts (
+          uuid,
+          court_number,
+          name,
+          description,
+          surface_type,
+          hourly_rate
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [
+          uuid,
+          data.court_number,
+          data.name,
+          data.description ?? null,
+          data.surface_type,
+          data.hourly_rate,
+        ]
+      );
+
+      const courtId = result.insertId;
+
+      // =====================================================
+      // CREATE DEFAULT COURT SCHEDULES
+      // =====================================================
+
+      const days = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+      ];
+
+      for (const day of days) {
+        await connection.query(
+          `
+          INSERT INTO court_schedules (
+            uuid,
+            court_id,
+            day_of_week,
+            open_time,
+            close_time,
+            is_closed
+          )
+          VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          [
+            randomUUID(),
+            courtId,
+            day,
+            "09:00:00",
+            "22:00:00",
+            false,
+          ]
+        );
+      }
+
+      // =====================================================
+      // COMMIT
+      // =====================================================
+
+      await connection.commit();
+
+      // Return the newly created court
+      return this.findById(courtId);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   /**
@@ -82,7 +155,7 @@ export class CourtRepository {
         updated_at
       FROM courts
       WHERE id = ?
-      AND is_deleted = 0
+        AND is_deleted = 0
       LIMIT 1
       `,
       [id]
@@ -100,7 +173,7 @@ export class CourtRepository {
       SELECT id
       FROM courts
       WHERE court_number = ?
-      AND is_deleted = 0
+        AND is_deleted = 0
       LIMIT 1
       `,
       [courtNumber]
@@ -109,38 +182,39 @@ export class CourtRepository {
     return rows[0];
   }
 
-  /**
-   * Update Court
-   */
-  async updateCourt(
-    id: number,
-    data: UpdateCourtInput
-  ) {
-    await pool.query(
-      `
-      UPDATE courts
-      SET
-        court_number = ?,
-        name = ?,
-        description = ?,
-        surface_type = ?,
-        hourly_rate = ?,
-        updated_at = NOW()
-      WHERE id = ?
-      `,
-      [
-        data.court_number,
-        data.name,
-        data.description ?? null,
-        data.surface_type,
-        data.hourly_rate,
-        id,
-      ]
-    );
+      /**
+       * Update Court
+       */
+    async updateCourt(
+      id: number,
+      data: UpdateCourtInput
+    ) {
+      await pool.query(
+        `
+        UPDATE courts
+        SET
+          court_number = ?,
+          name = ?,
+          description = ?,
+          surface_type = ?,
+          hourly_rate = ?,
+          status = ?,
+          updated_at = NOW()
+        WHERE id = ?
+        `,
+        [
+          data.court_number,
+          data.name,
+          data.description ?? null,
+          data.surface_type,
+          data.hourly_rate,
+          data.status ?? "Available",
+          id,
+        ]
+      );
 
-    return this.findById(id);
-  }
-
+      return this.findById(id);
+    }
   /**
    * Soft Delete
    */

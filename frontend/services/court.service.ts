@@ -14,4 +14,17 @@ export const courtService = {
 
     return response.data.data;
   },
+
+  
 };
+
+
+export async function deleteCourt(
+  id: number
+) {
+  const response = await api.delete(
+    `/courts/${id}`
+  );
+
+  return response.data;
+}
