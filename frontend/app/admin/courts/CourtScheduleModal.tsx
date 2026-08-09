@@ -1,21 +1,19 @@
 "use client";
 
 import {
-  useEffect,
-  useState,
-} from "react";
-
-import {
-  CalendarClock,
   Check,
-  Clock,
+  Clock3,
   X,
+  Loader2,
 } from "lucide-react";
 
 import {
   CourtSchedule,
+  UpdateCourtSchedulePayload,
   updateCourtSchedule,
 } from "@/lib/api/courtSchedules";
+
+import { useEffect, useState } from "react";
 
 interface Props {
   courtId: number;
@@ -25,7 +23,7 @@ interface Props {
   onSaved: () => void;
 }
 
-const DAYS = [
+const DAYS: CourtSchedule["day_of_week"][] = [
   "Monday",
   "Tuesday",
   "Wednesday",
@@ -33,9 +31,22 @@ const DAYS = [
   "Friday",
   "Saturday",
   "Sunday",
-] as const;
+];
+
+function normalizeTime(
+  value: string | null
+) {
+  if (!value) {
+    return "";
+  }
+
+  // MySQL returns HH:mm:ss
+  // HTML time input needs HH:mm
+  return value.slice(0, 5);
+}
 
 export default function CourtScheduleModal({
+  courtId,
   courtName,
   schedules,
   onClose,
@@ -44,195 +55,183 @@ export default function CourtScheduleModal({
   const [localSchedules, setLocalSchedules] =
     useState<CourtSchedule[]>([]);
 
-  const [savingId, setSavingId] =
-    useState<number | null>(null);
-
-  // ============================================================
-  // LOAD SCHEDULES
-  // ============================================================
+  const [savingDay, setSavingDay] =
+    useState<string | null>(null);
 
   useEffect(() => {
-    const normalizedSchedules =
-      schedules.map((schedule) => ({
-        ...schedule,
+    const mapped = DAYS.map((day) => {
+      const existing =
+        schedules.find(
+          (schedule) =>
+            schedule.day_of_week === day
+        );
 
-        // MySQL TIME:
-        // "09:00:00" -> "09:00"
-        open_time:
-          schedule.open_time
-            ?.slice(0, 5) ?? null,
+      if (existing) {
+        return {
+          ...existing,
 
-        close_time:
-          schedule.close_time
-            ?.slice(0, 5) ?? null,
+          open_time: normalizeTime(
+            existing.open_time
+          ),
 
-        // MySQL TINYINT:
-        // 0 -> false
-        // 1 -> true
-        is_closed:
-          Boolean(schedule.is_closed),
-      }));
+          close_time: normalizeTime(
+            existing.close_time
+          ),
 
-    setLocalSchedules(
-      normalizedSchedules
-    );
-  }, [schedules]);
-
-  // ============================================================
-  // GET SCHEDULE BY DAY
-  // ============================================================
-
-  function getSchedule(day: string) {
-    return localSchedules.find(
-      (schedule) =>
-        schedule.day_of_week === day
-    );
-  }
-
-  // ============================================================
-  // UPDATE LOCAL STATE
-  // ============================================================
-
-  function updateLocal(
-    id: number,
-    field: keyof CourtSchedule,
-    value: string | boolean | null
-  ) {
-    setLocalSchedules((current) =>
-      current.map((schedule) =>
-        schedule.id === id
-          ? {
-              ...schedule,
-              [field]: value,
-            }
-          : schedule
-      )
-    );
-  }
-
-  // ============================================================
-  // SAVE SCHEDULE
-  // ============================================================
-
-  async function saveSchedule(
-    schedule: CourtSchedule
-  ) {
-    try {
-      setSavingId(schedule.id);
-
-      // --------------------------------------------------------
-      // Normalize values before sending to backend
-      // --------------------------------------------------------
-
-      const openTime =
-        schedule.open_time
-          ? schedule.open_time.slice(0, 5)
-          : null;
-
-      const closeTime =
-        schedule.close_time
-          ? schedule.close_time.slice(0, 5)
-          : null;
-
-      const isClosed =
-        Boolean(schedule.is_closed);
-
-      // --------------------------------------------------------
-      // Validate time when the court is open
-      // --------------------------------------------------------
-
-      if (!isClosed) {
-        if (!openTime || !closeTime) {
-          console.error(
-            "Opening and closing time are required."
-          );
-
-          return;
-        }
-
-        if (openTime >= closeTime) {
-          console.error(
-            "Closing time must be later than opening time."
-          );
-
-          return;
-        }
+          is_closed:
+            Boolean(existing.is_closed),
+        };
       }
 
-      // --------------------------------------------------------
-      // UPDATE API
-      // --------------------------------------------------------
+      // Fallback if a day doesn't exist
+      return {
+        id: 0,
+        uuid: "",
+        court_id: courtId,
+        court_name: courtName,
+        day_of_week: day,
+        open_time: "09:00",
+        close_time: "22:00",
+        is_closed: false,
+      };
+    });
 
-      await updateCourtSchedule(
-        schedule.id,
+    setLocalSchedules(mapped);
+  }, [
+    schedules,
+    courtId,
+    courtName,
+  ]);
+
+  // =====================================================
+  // UPDATE LOCAL STATE
+  // =====================================================
+
+  const updateLocalSchedule = (
+    day: CourtSchedule["day_of_week"],
+    changes: Partial<CourtSchedule>
+  ) => {
+    setLocalSchedules(
+      (current) =>
+        current.map((schedule) =>
+          schedule.day_of_week === day
+            ? {
+                ...schedule,
+                ...changes,
+              }
+            : schedule
+        )
+    );
+  };
+
+  // =====================================================
+  // SAVE DAY
+  // =====================================================
+
+  const handleSave = async (
+    schedule: CourtSchedule
+  ) => {
+    try {
+      setSavingDay(
+        schedule.day_of_week
+      );
+
+      // ===============================================
+      // IMPORTANT
+      // ===============================================
+
+      const payload: UpdateCourtSchedulePayload =
         {
           day_of_week:
             schedule.day_of_week,
 
+          /*
+           * If closed:
+           *
+           * open_time = null
+           * close_time = null
+           *
+           * Otherwise use the selected times.
+           */
           open_time:
-            isClosed
+            schedule.is_closed
               ? null
-              : openTime,
+              : schedule.open_time,
 
           close_time:
-            isClosed
+            schedule.is_closed
               ? null
-              : closeTime,
+              : schedule.close_time,
 
+          /*
+           * MUST be boolean.
+           *
+           * true  = closed
+           * false = open
+           */
           is_closed:
-            isClosed,
-        }
+            Boolean(schedule.is_closed),
+        };
+
+      console.log(
+        "Saving court schedule:",
+        payload
       );
 
-      // Refresh parent data
+      // Existing schedule
+      if (schedule.id) {
+        await updateCourtSchedule(
+          schedule.id,
+          payload
+        );
+      }
+
       onSaved();
     } catch (error) {
       console.error(
-        "Failed to update schedule:",
+        "Failed to save court schedule:",
         error
       );
-    } finally {
-      setSavingId(null);
-    }
-  }
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+      alert(
+        "Failed to save court schedule."
+      );
+    } finally {
+      setSavingDay(null);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50">
-
+    <div className="fixed inset-0 z-50 flex">
+      {/* ================================================= */}
       {/* BACKDROP */}
+      {/* ================================================= */}
 
       <div
-        className="
-          absolute
-          inset-0
-          bg-slate-950/40
-          backdrop-blur-sm
-        "
+        className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
+      {/* ================================================= */}
       {/* PANEL */}
+      {/* ================================================= */}
 
-      <aside
+      <div
         className="
-          absolute
-          right-0
-          top-0
+          relative
+          ml-auto
           flex
           h-full
           w-full
-          max-w-2xl
+          max-w-xl
           flex-col
           bg-white
           shadow-2xl
         "
       >
-
+        {/* ================================================= */}
         {/* HEADER */}
+        {/* ================================================= */}
 
         <div
           className="
@@ -241,36 +240,34 @@ export default function CourtScheduleModal({
             justify-between
             border-b
             border-slate-200
-            px-7
-            py-6
+            px-6
+            py-5
           "
         >
-
           <div>
-
             <div
               className="
+                mb-2
                 flex
                 items-center
                 gap-2
                 text-xs
-                font-medium
+                font-semibold
                 uppercase
-                tracking-wider
+                tracking-wide
                 text-slate-400
               "
             >
-              <CalendarClock className="h-4 w-4" />
+              <Clock3 size={15} />
 
               Court Schedule
             </div>
 
             <h2
               className="
-                mt-2
                 text-xl
                 font-bold
-                text-slate-950
+                text-slate-900
               "
             >
               {courtName}
@@ -283,86 +280,52 @@ export default function CourtScheduleModal({
                 text-slate-500
               "
             >
-              Set the operating hours for this court.
+              Set the operating hours for this
+              court.
             </p>
-
           </div>
 
           <button
             type="button"
             onClick={onClose}
             className="
-              flex
-              h-9
-              w-9
-              items-center
-              justify-center
               rounded-lg
+              p-2
               text-slate-400
+              transition
               hover:bg-slate-100
               hover:text-slate-700
             "
           >
-            <X className="h-5 w-5" />
+            <X size={20} />
           </button>
-
         </div>
 
-        {/* CONTENT */}
+        {/* ================================================= */}
+        {/* DAYS */}
+        {/* ================================================= */}
 
         <div
           className="
             flex-1
+            space-y-3
             overflow-y-auto
-            px-7
-            py-6
+            bg-slate-50
+            px-5
+            py-4
           "
         >
-
-          <div className="space-y-3">
-
-            {DAYS.map((day) => {
-
-              const schedule =
-                getSchedule(day);
-
-              // ------------------------------------------------
-              // NO SCHEDULE
-              // ------------------------------------------------
-
-              if (!schedule) {
-                return (
-                  <div
-                    key={day}
-                    className="
-                      rounded-xl
-                      border
-                      border-slate-200
-                      bg-slate-50
-                      p-4
-                    "
-                  >
-                    <p
-                      className="
-                        text-sm
-                        font-medium
-                        text-slate-500
-                      "
-                    >
-                      No schedule configured for{" "}
-                      {day}.
-                    </p>
-                  </div>
-                );
-              }
-
-              // ------------------------------------------------
-              // SCHEDULE
-              // ------------------------------------------------
+          {localSchedules.map(
+            (schedule) => {
+              const saving =
+                savingDay ===
+                schedule.day_of_week;
 
               return (
                 <div
-                  key={schedule.id}
+                  key={
+                    schedule.day_of_week
+                  }
                   className="
                     rounded-xl
                     border
@@ -371,58 +334,53 @@ export default function CourtScheduleModal({
                     p-4
                   "
                 >
+                  {/* ===================================== */}
+                  {/* DAY HEADER */}
+                  {/* ===================================== */}
 
                   <div
                     className="
                       flex
                       items-center
                       justify-between
-                      gap-4
                     "
                   >
-
-                    {/* DAY */}
-
-                    <div className="w-28 shrink-0">
-
-                      <p
-                        className="
-                          text-sm
-                          font-semibold
-                          text-slate-900
-                        "
-                      >
-                        {day}
-                      </p>
-
-                    </div>
-
-                    {/* CLOSED */}
+                    <h3
+                      className="
+                        font-semibold
+                        text-slate-800
+                      "
+                    >
+                      {
+                        schedule.day_of_week
+                      }
+                    </h3>
 
                     <label
                       className="
                         flex
+                        cursor-pointer
                         items-center
                         gap-2
                         text-sm
                         text-slate-500
                       "
                     >
-
                       <input
                         type="checkbox"
                         checked={
-                          Boolean(
-                            schedule.is_closed
-                          )
+                          schedule.is_closed
                         }
-                        onChange={(event) =>
-                          updateLocal(
-                            schedule.id,
-                            "is_closed",
-                            event.target.checked
-                          )
-                        }
+                        onChange={(e) => {
+                          updateLocalSchedule(
+                            schedule.day_of_week,
+                            {
+                              is_closed:
+                                e.target
+                                  .checked,
+                            }
+                          );
+                        }}
                         className="
                           h-4
                           w-4
@@ -432,16 +390,37 @@ export default function CourtScheduleModal({
                       />
 
                       Closed
-
                     </label>
-
                   </div>
 
-                  {/* HOURS */}
+                  {/* ===================================== */}
+                  {/* CLOSED */}
+                  {/* ===================================== */}
 
-                  {!Boolean(
-                    schedule.is_closed
-                  ) && (
+                  {schedule.is_closed ? (
+                    <div
+                      className="
+                        mt-4
+                        rounded-lg
+                        border
+                        border-red-100
+                        bg-red-50
+                        px-4
+                        py-3
+                        text-sm
+                        text-red-600
+                      "
+                    >
+                      This court is closed
+                      on{" "}
+                      {
+                        schedule.day_of_week
+                      }.
+                    </div>
+                  ) : (
+                    /* =================================== */
+                    /* OPEN */
+                    /* =================================== */
 
                     <div
                       className="
@@ -451,11 +430,9 @@ export default function CourtScheduleModal({
                         gap-3
                       "
                     >
-
                       {/* OPEN */}
 
                       <div className="flex-1">
-
                         <label
                           className="
                             mb-1.5
@@ -468,62 +445,51 @@ export default function CourtScheduleModal({
                           Opens
                         </label>
 
-                        <div className="relative">
-
-                          <Clock
-                            className="
-                              pointer-events-none
-                              absolute
-                              left-3
-                              top-1/2
-                              h-4
-                              w-4
-                              -translate-y-1/2
-                              text-slate-400
-                            "
-                          />
-
-                          <input
-                            type="time"
-                            value={
+                        <input
+                          type="time"
+                          value={
+                            normalizeTime(
                               schedule.open_time
-                                ?.slice(0, 5) ?? ""
-                            }
-                            onChange={(event) =>
-                              updateLocal(
-                                schedule.id,
-                                "open_time",
-                                event.target.value
-                              )
-                            }
-                            className="
-                              h-10
-                              w-full
-                              rounded-lg
-                              border
-                              border-slate-200
-                              bg-white
-                              pl-9
-                              pr-3
-                              text-sm
-                              text-slate-900
-                              outline-none
-                              focus:border-slate-400
-                            "
-                          />
-
-                        </div>
-
+                            )
+                          }
+                          onChange={(e) => {
+                            updateLocalSchedule(
+                              schedule.day_of_week,
+                              {
+                                open_time:
+                                  e.target
+                                    .value,
+                              }
+                            );
+                          }}
+                          className="
+                            h-10
+                            w-full
+                            rounded-lg
+                            border
+                            border-slate-200
+                            bg-white
+                            px-3
+                            text-sm
+                            text-slate-700
+                            outline-none
+                            focus:border-slate-400
+                          "
+                        />
                       </div>
 
-                      <span className="pb-2 text-slate-300">
+                      <div
+                        className="
+                          pb-3
+                          text-slate-300
+                        "
+                      >
                         —
-                      </span>
+                      </div>
 
                       {/* CLOSE */}
 
                       <div className="flex-1">
-
                         <label
                           className="
                             mb-1.5
@@ -536,138 +502,133 @@ export default function CourtScheduleModal({
                           Closes
                         </label>
 
-                        <div className="relative">
-
-                          <Clock
-                            className="
-                              pointer-events-none
-                              absolute
-                              left-3
-                              top-1/2
-                              h-4
-                              w-4
-                              -translate-y-1/2
-                              text-slate-400
-                            "
-                          />
-
-                          <input
-                            type="time"
-                            value={
+                        <input
+                          type="time"
+                          value={
+                            normalizeTime(
                               schedule.close_time
-                                ?.slice(0, 5) ?? ""
-                            }
-                            onChange={(event) =>
-                              updateLocal(
-                                schedule.id,
-                                "close_time",
-                                event.target.value
-                              )
-                            }
-                            className="
-                              h-10
-                              w-full
-                              rounded-lg
-                              border
-                              border-slate-200
-                              bg-white
-                              pl-9
-                              pr-3
-                              text-sm
-                              text-slate-900
-                              outline-none
-                              focus:border-slate-400
-                            "
-                          />
-
-                        </div>
-
+                            )
+                          }
+                          onChange={(e) => {
+                            updateLocalSchedule(
+                              schedule.day_of_week,
+                              {
+                                close_time:
+                                  e.target
+                                    .value,
+                              }
+                            );
+                          }}
+                          className="
+                            h-10
+                            w-full
+                            rounded-lg
+                            border
+                            border-slate-200
+                            bg-white
+                            px-3
+                            text-sm
+                            text-slate-700
+                            outline-none
+                            focus:border-slate-400
+                          "
+                        />
                       </div>
-
-                      {/* SAVE */}
-
-                      <button
-                        type="button"
-                        disabled={
-                          savingId ===
-                          schedule.id
-                        }
-                        onClick={() =>
-                          saveSchedule(
-                            schedule
-                          )
-                        }
-                        className="
-                          flex
-                          h-10
-                          items-center
-                          gap-2
-                          rounded-lg
-                          bg-slate-950
-                          px-4
-                          text-sm
-                          font-medium
-                          text-white
-                          hover:bg-slate-800
-                          disabled:cursor-not-allowed
-                          disabled:opacity-50
-                        "
-                      >
-
-                        <Check className="h-4 w-4" />
-
-                        {savingId ===
-                        schedule.id
-                          ? "Saving..."
-                          : "Save"}
-
-                      </button>
-
                     </div>
-
                   )}
 
+                  {/* ===================================== */}
+                  {/* SAVE */}
+                  {/* ===================================== */}
+
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      disabled={
+                        saving ||
+                        !schedule.id
+                      }
+                      onClick={() =>
+                        handleSave(
+                          schedule
+                        )
+                      }
+                      className="
+                        inline-flex
+                        h-10
+                        items-center
+                        gap-2
+                        rounded-lg
+                        bg-slate-950
+                        px-5
+                        text-sm
+                        font-semibold
+                        text-white
+                        transition
+                        hover:bg-slate-800
+                        disabled:cursor-not-allowed
+                        disabled:opacity-50
+                      "
+                    >
+                      {saving ? (
+                        <>
+                          <Loader2
+                            size={15}
+                            className="animate-spin"
+                          />
+
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Check
+                            size={15}
+                          />
+
+                          Save
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               );
-            })}
-
-          </div>
-
+            }
+          )}
         </div>
 
+        {/* ================================================= */}
         {/* FOOTER */}
+        {/* ================================================= */}
 
         <div
           className="
             border-t
             border-slate-200
             bg-white
-            px-7
-            py-4
+            p-4
           "
         >
-
           <button
             type="button"
             onClick={onClose}
             className="
+              h-11
               w-full
               rounded-xl
               border
               border-slate-200
-              py-2.5
+              bg-white
               text-sm
               font-medium
               text-slate-700
+              transition
               hover:bg-slate-50
             "
           >
             Close
           </button>
-
         </div>
-
-      </aside>
+      </div>
     </div>
   );
 }

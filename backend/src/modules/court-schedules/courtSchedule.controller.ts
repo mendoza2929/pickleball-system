@@ -6,96 +6,176 @@ import { ApiResponse } from "../../utils/apiResponse";
 import { CourtScheduleService } from "./courtSchedule.service";
 
 import {
-  createCourtScheduleSchema,
   updateCourtScheduleSchema,
 } from "./courtSchedule.validator";
 
 export class CourtScheduleController {
-  private courtScheduleService = new CourtScheduleService();
+  private service =
+    new CourtScheduleService();
 
-  /**
-   * POST /api/court-schedules
-   */
-  create = asyncHandler(async (req: Request, res: Response) => {
-    const data = createCourtScheduleSchema.parse(req.body);
+  // =====================================================
+  // GET ALL SCHEDULES FOR A COURT
+  // =====================================================
+  //
+  // GET /api/court-schedules/court/:courtId
+  //
+  getCourtSchedules = asyncHandler(
+    async (
+      req: Request,
+      res: Response
+    ) => {
+      const courtId =
+        Number(req.params.courtId);
 
-    const schedule =
-      await this.courtScheduleService.createSchedule(data);
+      if (Number.isNaN(courtId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid court ID.",
+        });
+      }
 
-    return ApiResponse.success(
-      res,
-      schedule,
-      "Court schedule created successfully.",
-      201
-    );
-  });
+      const schedules =
+        await this.service.getCourtSchedules(
+          courtId
+        );
 
-  /**
-   * GET /api/court-schedules
-   */
-  getAll = asyncHandler(async (_req: Request, res: Response) => {
-    const schedules =
-      await this.courtScheduleService.getSchedules();
-
-    return ApiResponse.success(
-      res,
-      schedules,
-      "Court schedules retrieved successfully."
-    );
-  });
-
-  /**
-   * GET /api/court-schedules/court/:courtId
-   */
-  getByCourt = asyncHandler(async (req: Request, res: Response) => {
-    const courtId = Number(req.params.courtId);
-
-    const schedules =
-      await this.courtScheduleService.getCourtSchedules(
-        courtId
+      return ApiResponse.success(
+        res,
+        schedules,
+        "Court schedules retrieved successfully."
       );
+    }
+  );
 
-    return ApiResponse.success(
-      res,
-      schedules,
-      "Court schedules retrieved successfully."
-    );
-  });
+  // =====================================================
+  // GET SCHEDULE BY ID
+  // =====================================================
+  //
+  // GET /api/court-schedules/:id
+  //
+  getById = asyncHandler(
+    async (
+      req: Request,
+      res: Response
+    ) => {
+      const id =
+        Number(req.params.id);
 
-  /**
-   * PUT /api/court-schedules/:id
-   */
-  update = asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
+      if (Number.isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid schedule ID.",
+        });
+      }
 
-    const data = updateCourtScheduleSchema.parse(req.body);
+      const schedule =
+        await this.service.getById(id);
 
-    const schedule =
-      await this.courtScheduleService.updateSchedule(
-        id,
-        data
+      return ApiResponse.success(
+        res,
+        schedule,
+        "Court schedule retrieved successfully."
       );
+    }
+  );
 
-    return ApiResponse.success(
-      res,
-      schedule,
-      "Court schedule updated successfully."
-    );
-  });
+  // =====================================================
+  // GET SCHEDULE BY COURT + DAY
+  // =====================================================
+  //
+  // GET /api/court-schedules/court/:courtId/:day
+  //
+  // Example:
+  //
+  // /api/court-schedules/court/7/Friday
+  //
+  getByCourtAndDay = asyncHandler(
+    async (
+      req: Request,
+      res: Response
+    ) => {
+      const courtId =
+        Number(req.params.courtId);
 
-  /**
-   * DELETE /api/court-schedules/:id
-   */
-  delete = asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id);
+      // IMPORTANT:
+      // Convert string | string[] into string
+      const dayOfWeek =
+        String(req.params.day);
 
-    const result =
-      await this.courtScheduleService.deleteSchedule(id);
+      if (Number.isNaN(courtId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid court ID.",
+        });
+      }
 
-    return ApiResponse.success(
-      res,
-      result,
-      result.message
-    );
-  });
+      if (!dayOfWeek) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Day of week is required.",
+        });
+      }
+
+      const schedule =
+        await this.service.getByCourtAndDay(
+          courtId,
+          dayOfWeek
+        );
+
+      return ApiResponse.success(
+        res,
+        schedule,
+        "Court schedule retrieved successfully."
+      );
+    }
+  );
+
+  // =====================================================
+  // UPDATE COURT SCHEDULE
+  // =====================================================
+  //
+  // PUT /api/court-schedules/:id
+  //
+  update = asyncHandler(
+    async (
+      req: Request,
+      res: Response
+    ) => {
+      const id =
+        Number(req.params.id);
+
+      if (Number.isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid schedule ID.",
+        });
+      }
+
+      // =================================================
+      // VALIDATE BODY
+      // =================================================
+
+      const data =
+        updateCourtScheduleSchema.parse(
+          req.body
+        );
+
+      // =================================================
+      // UPDATE
+      // =================================================
+
+      const schedule =
+        await this.service.update(
+          id,
+          data
+        );
+
+      return ApiResponse.success(
+        res,
+        schedule,
+        "Court schedule updated successfully."
+      );
+    }
+  );
 }

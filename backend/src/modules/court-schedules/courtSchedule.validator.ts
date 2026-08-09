@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-const days = [
+// =====================================================
+// DAYS
+// =====================================================
+
+const dayOfWeekSchema = z.enum([
   "Monday",
   "Tuesday",
   "Wednesday",
@@ -8,27 +12,43 @@ const days = [
   "Friday",
   "Saturday",
   "Sunday",
-] as const;
+]);
 
-export const createCourtScheduleSchema = z.object({
-  court_id: z.number().int().positive(),
+// =====================================================
+// TIME
+// =====================================================
 
-  day_of_week: z.enum(days),
+const timeSchema = z
+  .string()
+  .regex(
+    /^([01]\d|2[0-3]):([0-5]\d)$/,
+    "Time must be in HH:mm format."
+  );
 
-  open_time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-
-  close_time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-
-  is_closed: z.boolean().optional().default(false),
-});
+// =====================================================
+// UPDATE COURT SCHEDULE
+// =====================================================
 
 export const updateCourtScheduleSchema =
-  createCourtScheduleSchema.partial();
+  z.object({
+    day_of_week:
+      dayOfWeekSchema,
 
-export type CreateCourtScheduleInput = z.infer<
-  typeof createCourtScheduleSchema
->;
+    open_time:
+      timeSchema.nullable(),
 
-export type UpdateCourtScheduleInput = z.infer<
-  typeof updateCourtScheduleSchema
->;
+    close_time:
+      timeSchema.nullable(),
+
+    is_closed:
+      z.boolean(),
+  });
+
+// =====================================================
+// TYPE
+// =====================================================
+
+export type UpdateCourtScheduleInput =
+  z.infer<
+    typeof updateCourtScheduleSchema
+  >;

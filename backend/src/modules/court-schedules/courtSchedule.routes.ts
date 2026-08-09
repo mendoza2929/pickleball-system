@@ -1,47 +1,62 @@
 import { Router } from "express";
 
 import { CourtScheduleController } from "./courtSchedule.controller";
+
 import { authenticate } from "../../middleware/authenticate";
+import { authorizeAdmin } from "../../middleware/authorizeAdmin";
 
 const router = Router();
 
-const controller = new CourtScheduleController();
+const controller =
+  new CourtScheduleController();
 
-/**
- * Court Schedule Routes
- */
+// =====================================================
+// PUBLIC
+// =====================================================
 
-// Create (Admin)
-router.post(
-  "/",
-  authenticate,
-  controller.create
-);
-
-// Get All (Public)
-router.get(
-  "/",
-  controller.getAll
-);
-
-// Get By Court (Public)
+// Get all schedules for a court
+//
+// GET /api/court-schedules/court/:courtId
+//
 router.get(
   "/court/:courtId",
-  controller.getByCourt
+  controller.getCourtSchedules
 );
 
-// Update (Admin)
+// Get schedule for a specific court + day
+//
+// GET /api/court-schedules/court/:courtId/:day
+//
+// Example:
+// /api/court-schedules/court/7/Friday
+//
+router.get(
+  "/court/:courtId/:day",
+  controller.getByCourtAndDay
+);
+
+// Get schedule by ID
+//
+// GET /api/court-schedules/:id
+//
+router.get(
+  "/:id",
+  controller.getById
+);
+
+// =====================================================
+// ADMIN / PROTECTED
+// =====================================================
+
+// Update schedule
+//
+// PUT /api/court-schedules/:id
+//
 router.put(
   "/:id",
   authenticate,
+  authorizeAdmin,
   controller.update
-);
-
-// Delete (Admin)
-router.delete(
-  "/:id",
-  authenticate,
-  controller.delete
 );
 
 export default router;

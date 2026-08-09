@@ -1,112 +1,170 @@
 import { CourtScheduleRepository } from "./courtSchedule.repository";
-import { CourtRepository } from "../courts/court.repository";
-
-import {
-  CreateCourtScheduleInput,
-  UpdateCourtScheduleInput,
-} from "./courtSchedule.validator";
-
-import { BadRequestError } from "../../shared/errors/BadRequestError";
-import { ConflictError } from "../../shared/errors/ConflictError";
-import { NotFoundError } from "../../shared/errors/NotFoundError";
 
 export class CourtScheduleService {
-  private scheduleRepository = new CourtScheduleRepository();
-  private courtRepository = new CourtRepository();
+  private repository = new CourtScheduleRepository();
 
-  /**
-   * Create Schedule
-   */
-  async createSchedule(data: CreateCourtScheduleInput) {
-    // Check court exists
-    const court = await this.courtRepository.findById(data.court_id);
+  // =====================================================
+  // GET ALL SCHEDULES FOR A COURT
+  // =====================================================
 
-    if (!court) {
-      throw new NotFoundError("Court not found.");
-    }
-
-    // Check duplicate day
-    const existing = await this.scheduleRepository.findByCourtAndDay(
-      data.court_id,
-      data.day_of_week
-    );
-
-    if (existing) {
-      throw new ConflictError(
-        `${data.day_of_week} schedule already exists for this court.`
-      );
-    }
-
-    // Validate time
-    if (data.open_time >= data.close_time) {
-      throw new BadRequestError(
-        "Close time must be greater than open time."
-      );
-    }
-
-    return await this.scheduleRepository.create(data);
-  }
-
-  /**
-   * Get All Schedules
-   */
-  async getSchedules() {
-    return await this.scheduleRepository.findAll();
-  }
-
-  /**
-   * Get Schedules By Court
-   */
   async getCourtSchedules(courtId: number) {
-    const court = await this.courtRepository.findById(courtId);
-
-    if (!court) {
-      throw new NotFoundError("Court not found.");
+    if (!courtId || Number.isNaN(courtId)) {
+      throw new Error("INVALID_COURT_ID");
     }
 
-    return await this.scheduleRepository.findByCourt(courtId);
+    const schedules =
+      await this.repository.findByCourt(courtId);
+
+    return schedules;
   }
 
-  /**
-   * Update Schedule
-   */
-  async updateSchedule(
-    id: number,
-    data: UpdateCourtScheduleInput
-  ) {
-    const schedule = await this.scheduleRepository.findById(id);
+  // =====================================================
+  // GET SCHEDULE BY ID
+  // =====================================================
 
-    if (!schedule) {
-      throw new NotFoundError("Schedule not found.");
+  async getById(id: number) {
+    if (!id || Number.isNaN(id)) {
+      throw new Error("INVALID_SCHEDULE_ID");
     }
 
-    if (
-      data.open_time &&
-      data.close_time &&
-      data.open_time >= data.close_time
-    ) {
-      throw new BadRequestError(
-        "Close time must be greater than open time."
+    const schedule =
+      await this.repository.findById(id);
+
+    if (!schedule) {
+      throw new Error(
+        "COURT_SCHEDULE_NOT_FOUND"
       );
     }
 
-    return await this.scheduleRepository.update(id, data);
+    return schedule;
   }
 
-  /**
-   * Delete Schedule
-   */
-  async deleteSchedule(id: number) {
-    const schedule = await this.scheduleRepository.findById(id);
+  // =====================================================
+  // GET SCHEDULE BY COURT AND DAY
+  // =====================================================
 
-    if (!schedule) {
-      throw new NotFoundError("Schedule not found.");
+  async getByCourtAndDay(
+    courtId: number,
+    dayOfWeek: string
+  ) {
+    if (!courtId || Number.isNaN(courtId)) {
+      throw new Error("INVALID_COURT_ID");
     }
 
-    await this.scheduleRepository.delete(id);
+    const schedule =
+      await this.repository.findByCourtAndDay(
+        courtId,
+        dayOfWeek
+      );
 
-    return {
-      message: "Schedule deleted successfully.",
-    };
+    if (!schedule) {
+      throw new Error(
+        "COURT_SCHEDULE_NOT_FOUND"
+      );
+    }
+
+    return schedule;
+  }
+
+  // =====================================================
+  // UPDATE SCHEDULE
+  // =====================================================
+
+  async update(
+    id: number,
+    data: {
+      day_of_week:
+        | "Monday"
+        | "Tuesday"
+        | "Wednesday"
+        | "Thursday"
+        | "Friday"
+        | "Saturday"
+        | "Sunday";
+
+      open_time: string | null;
+
+      close_time: string | null;
+
+      is_closed: boolean;
+    }
+  ) {
+    if (!id || Number.isNaN(id)) {
+      throw new Error(
+        "INVALID_SCHEDULE_ID"
+      );
+    }
+
+    // ===================================================
+    // VALIDATE CLOSED / OPEN STATE
+    // ===================================================
+
+    if (data.is_closed === true) {
+      /**
+       * When closed, the frontend is allowed
+       * to send null times.
+       *
+       * The repository will keep the existing
+       * database times because the columns are
+       * NOT NULL.
+       */
+    } else {
+      /**
+       * When open, both times are required.
+       */
+      if (
+        !data.open_time ||
+        !data.close_time
+      ) {
+        throw new Error(
+          "OPEN_TIME_AND_CLOSE_TIME_REQUIRED"
+        );
+      }
+
+      // ================================================
+      // VALIDATE TIME FORMAT
+      // ================================================
+
+      const timeRegex =
+        /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+      if (
+        !timeRegex.test(data.open_time)
+      ) {
+        throw new Error(
+          "INVALID_OPEN_TIME"
+        );
+      }
+
+      if (
+        !timeRegex.test(data.close_time)
+      ) {
+        throw new Error(
+          "INVALID_CLOSE_TIME"
+        );
+      }
+
+      // ================================================
+      // OPEN MUST BE BEFORE CLOSE
+      // ================================================
+
+      if (
+        data.open_time >=
+        data.close_time
+      ) {
+        throw new Error(
+          "INVALID_COURT_SCHEDULE_TIME"
+        );
+      }
+    }
+
+    // ===================================================
+    // UPDATE
+    // ===================================================
+
+    return this.repository.update(
+      id,
+      data
+    );
   }
 }
