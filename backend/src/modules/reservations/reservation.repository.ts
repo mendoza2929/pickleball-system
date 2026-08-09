@@ -394,6 +394,7 @@ export class ReservationRepository {
     return this.findById(id);
   }
 
+
   /**
    * Update Reservation Status
    */
@@ -402,7 +403,6 @@ export class ReservationRepository {
     reservationStatus: string,
     paymentStatus: string
   ) {
-
     await pool.query(
       `
       UPDATE reservations
@@ -416,6 +416,10 @@ export class ReservationRepository {
         paymentStatus,
         reservationId,
       ]
+    );
+
+    return this.findById(
+      reservationId
     );
   }
 

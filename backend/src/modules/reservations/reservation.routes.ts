@@ -93,4 +93,12 @@ router.patch(
 );
 
 
+router.patch(
+  "/:id/status",
+  authenticate,
+  authorizeAdmin,
+  reservationController.updateStatus
+);
+
+
 export default router;

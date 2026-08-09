@@ -17,7 +17,10 @@ import {
   X,
 } from "lucide-react";
 
-import { getReservations } from "@/lib/api/reservations";
+import {
+  getReservations,
+  updateReservation,
+} from "@/lib/api/reservations";
 
 // ============================================================
 // TYPES
@@ -219,6 +222,8 @@ function PaymentStatusBadge({
 // PAGE
 // ============================================================
 
+
+
 export default function ReservationsPage() {
   const [
     reservations,
@@ -256,6 +261,15 @@ export default function ReservationsPage() {
     showFilters,
     setShowFilters,
   ] = useState(false);
+
+  const [editReservationStatus, setEditReservationStatus] =
+  useState<ReservationStatus>("Pending");
+
+  const [editPaymentStatus, setEditPaymentStatus] =
+    useState<PaymentStatus>("Unpaid");
+
+  const [savingReservation, setSavingReservation] =
+    useState(false);
 
   // ==========================================================
   // LOAD RESERVATIONS
@@ -300,81 +314,145 @@ export default function ReservationsPage() {
   // FILTERED RESERVATIONS
   // ==========================================================
 
+ // ==========================================================
+// FILTERED + SORTED RESERVATIONS
+// ==========================================================
+
   const filteredReservations = useMemo(() => {
-    const query = search
-      .trim()
-      .toLowerCase();
+    const query = search.trim().toLowerCase();
 
-    return reservations.filter(
-      (reservation) => {
-        const customer =
-          reservation.player_name ||
-          reservation.guest_name ||
-          "";
+    const filtered = reservations.filter((reservation) => {
+      const customer =
+        reservation.player_name ||
+        reservation.guest_name ||
+        "";
 
-        const email =
-          reservation.guest_email ||
-          "";
+      const email =
+        reservation.guest_email ||
+        "";
 
-        const reservationNo =
-          reservation.reservation_no ||
-          "";
+      const reservationNo =
+        reservation.reservation_no ||
+        "";
 
-        const court =
-          reservation.court_name ||
-          `Court ${reservation.court_id}`;
+      const court =
+        reservation.court_name ||
+        `Court ${reservation.court_id}`;
 
-        const matchesSearch =
-          !query ||
-          reservationNo
-            .toLowerCase()
-            .includes(query) ||
-          customer
-            .toLowerCase()
-            .includes(query) ||
-          email
-            .toLowerCase()
-            .includes(query) ||
-          court
-            .toLowerCase()
-            .includes(query);
+      const matchesSearch =
+        !query ||
+        reservationNo.toLowerCase().includes(query) ||
+        customer.toLowerCase().includes(query) ||
+        email.toLowerCase().includes(query) ||
+        court.toLowerCase().includes(query);
 
-        const matchesStatus =
-          statusFilter === "All" ||
-          reservation.reservation_status ===
-            statusFilter;
+      const matchesStatus =
+        statusFilter === "All" ||
+        reservation.reservation_status === statusFilter;
 
-        let matchesDate = true;
+      let matchesDate = true;
 
-        if (dateFilter) {
-          const reservationDate =
-            new Date(
-              reservation.reservation_date
-            );
-
-          const selectedDate =
-            new Date(
-              `${dateFilter}T00:00:00`
-            );
-
-          matchesDate =
-            reservationDate.toDateString() ===
-            selectedDate.toDateString();
-        }
-
-        return (
-          matchesSearch &&
-          matchesStatus &&
-          matchesDate
+      if (dateFilter) {
+        const reservationDate = new Date(
+          reservation.reservation_date
         );
+
+        const selectedDate = new Date(
+          `${dateFilter}T00:00:00`
+        );
+
+        matchesDate =
+          reservationDate.toDateString() ===
+          selectedDate.toDateString();
       }
-    );
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesDate
+      );
+    });
+
+    
+
+    // ----------------------------------------------------------
+    // SORT BY NEAREST UPCOMING SCHEDULE
+    // ----------------------------------------------------------
+    
+
+
+    const now = new Date().getTime();
+
+    return filtered.sort((a, b) => {
+      const aDate = a.reservation_date.slice(0, 10);
+      const bDate = b.reservation_date.slice(0, 10);
+
+      const aTime = a.start_time.slice(0, 8);
+      const bTime = b.start_time.slice(0, 8);
+
+      const aSchedule = new Date(
+        `${aDate}T${aTime}`
+      ).getTime();
+
+      const bSchedule = new Date(
+        `${bDate}T${bTime}`
+      ).getTime();
+
+      const aIsPast = aSchedule < now;
+      const bIsPast = bSchedule < now;
+
+      // Upcoming reservations first
+      if (aIsPast !== bIsPast) {
+        return aIsPast ? 1 : -1;
+      }
+
+      // Sort by nearest date/time
+      return aSchedule - bSchedule;
+    });
   }, [
     reservations,
     search,
     statusFilter,
     dateFilter,
   ]);
+
+  const handleSaveReservation = async () => {
+    if (!selectedReservation) return;
+
+    try {
+      setSavingReservation(true);
+
+      const updatedReservation =
+        await updateReservation(
+          selectedReservation.id,
+          {
+            reservation_status:
+              editReservationStatus,
+            payment_status:
+              editPaymentStatus,
+          }
+        );
+
+      setReservations((current) =>
+        current.map((reservation) =>
+          reservation.id === updatedReservation.id
+            ? updatedReservation
+            : reservation
+        )
+      );
+
+      setSelectedReservation(
+        updatedReservation
+      );
+    } catch (error) {
+      console.error(
+        "Failed to update reservation:",
+        error
+      );
+    } finally {
+      setSavingReservation(false);
+    }
+  };
 
   // ==========================================================
   // SUMMARY
@@ -1042,11 +1120,17 @@ export default function ReservationsPage() {
 
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setSelectedReservation(
-                                    reservation
-                                  )
-                                }
+                                onClick={() => {
+                                  setSelectedReservation(reservation);
+
+                                  setEditReservationStatus(
+                                    reservation.reservation_status
+                                  );
+
+                                  setEditPaymentStatus(
+                                    reservation.payment_status
+                                  );
+                                }}
                                 className="
                                   text-left
                                   text-sm
@@ -1321,11 +1405,53 @@ export default function ReservationsPage() {
 
               <div className="flex items-center justify-between">
 
-                <ReservationStatusBadge
-                  status={
-                    selectedReservation.reservation_status
-                  }
-                />
+               <section className="mt-7">
+                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">
+                    Reservation Status
+                  </p>
+
+                  <select
+                    value={editReservationStatus}
+                    onChange={(event) =>
+                      setEditReservationStatus(
+                        event.target.value as ReservationStatus
+                      )
+                    }
+                    className="
+                      h-11
+                      w-full
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-white
+                      px-4
+                      text-sm
+                      font-medium
+                      text-slate-700
+                      outline-none
+                      transition
+                      focus:border-[#9bd900]
+                      focus:ring-2
+                      focus:ring-[#b7ff00]/20
+                    "
+                  >
+                    <option value="Pending">
+                      Pending
+                    </option>
+
+                    <option value="Confirmed">
+                      Confirmed
+                    </option>
+
+                    <option value="Cancelled">
+                      Cancelled
+                    </option>
+
+                    <option value="Completed">
+                      Completed
+                    </option>
+                  </select>
+                </section>
 
                 <span className="text-lg font-semibold text-slate-900">
                   {formatCurrency(
@@ -1478,18 +1604,47 @@ export default function ReservationsPage() {
 
                 <div className="rounded-2xl border border-slate-200 p-4">
 
-                  <div className="flex items-center justify-between">
-
+                 <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">
                       Payment status
                     </span>
 
-                    <PaymentStatusBadge
-                      status={
-                        selectedReservation.payment_status
+                    <select
+                      value={editPaymentStatus}
+                      onChange={(event) =>
+                        setEditPaymentStatus(
+                          event.target.value as PaymentStatus
+                        )
                       }
-                    />
+                      className="
+                        h-10
+                        min-w-[130px]
+                        rounded-lg
+                        border
+                        border-slate-200
+                        bg-white
+                        px-3
+                        text-sm
+                        font-medium
+                        text-slate-700
+                        outline-none
+                        focus:border-[#9bd900]
+                        focus:ring-2
+                        focus:ring-[#b7ff00]/20
+                      "
+                    >
+                      <option value="Unpaid">
+                        Unpaid
+                      </option>
 
+                      <option value="Partial">
+                        Partial
+                      </option>
+
+                      <option value="Paid">
+                        Paid
+                      </option>
+                    </select>
                   </div>
 
                   <div className="mt-3 flex items-center justify-between">
@@ -1550,32 +1705,55 @@ export default function ReservationsPage() {
 
             {/* Footer */}
 
-            <div className="border-t border-slate-200 bg-white px-6 py-4">
+           <div className="flex gap-3 border-t border-slate-200 bg-white px-6 py-4">
+  <button
+    type="button"
+    onClick={() =>
+      setSelectedReservation(null)
+    }
+    disabled={savingReservation}
+    className="
+      h-11
+      flex-1
+      rounded-xl
+      border
+      border-slate-200
+      bg-white
+      text-sm
+      font-medium
+      text-slate-700
+      transition
+      hover:bg-slate-50
+      disabled:cursor-not-allowed
+      disabled:opacity-50
+    "
+  >
+    Cancel
+  </button>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setSelectedReservation(
-                    null
-                  )
-                }
-                className="
-                  h-11
-                  w-full
-                  rounded-xl
-                  bg-slate-900
-                  text-sm
-                  font-medium
-                  text-white
-                  transition
-                  hover:bg-slate-800
-                "
-              >
-                Close
-              </button>
-
-            </div>
-
+  <button
+    type="button"
+    onClick={handleSaveReservation}
+    disabled={savingReservation}
+    className="
+      h-11
+      flex-1
+      rounded-xl
+      bg-slate-900
+      text-sm
+      font-medium
+      text-white
+      transition
+      hover:bg-slate-800
+      disabled:cursor-not-allowed
+      disabled:opacity-50
+    "
+  >
+    {savingReservation
+      ? "Saving..."
+      : "Save Changes"}
+  </button>
+</div>
           </aside>
         </>
       )}

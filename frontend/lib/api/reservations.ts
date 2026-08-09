@@ -47,10 +47,38 @@ interface ReservationsResponse {
   data: Reservation[];
 }
 
+interface ReservationResponse {
+  success: boolean;
+  message: string;
+  data: Reservation;
+}
+
 export async function getReservations(): Promise<Reservation[]> {
   const response =
     await api.get<ReservationsResponse>(
       "/reservations"
+    );
+
+  return response.data.data;
+}
+
+// ============================================================
+// UPDATE RESERVATION STATUS / PAYMENT STATUS
+// ============================================================
+
+export interface UpdateReservationPayload {
+  reservation_status?: Reservation["reservation_status"];
+  payment_status?: Reservation["payment_status"];
+}
+
+export async function updateReservation(
+  id: number,
+  payload: UpdateReservationPayload
+): Promise<Reservation> {
+  const response =
+    await api.patch<ReservationResponse>(
+       `/reservations/${id}/status`,
+      payload
     );
 
   return response.data.data;

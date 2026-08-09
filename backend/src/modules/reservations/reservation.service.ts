@@ -474,4 +474,79 @@ async getById(
 
     };
   }
+
+    /**
+   * Update Reservation Status
+   */
+  async updateStatus(
+    id: number,
+    data: {
+      reservation_status: string;
+      payment_status: string;
+    }
+  ) {
+    // ---------------------------------------------------
+    // Find Reservation
+    // ---------------------------------------------------
+
+    const reservation =
+      await this.reservationRepository.findById(id);
+
+    if (!reservation) {
+      throw new NotFoundError(
+        "Reservation not found."
+      );
+    }
+
+    // ---------------------------------------------------
+    // Validate Reservation Status
+    // ---------------------------------------------------
+
+    const validReservationStatuses = [
+      RESERVATION_STATUS.PENDING,
+      RESERVATION_STATUS.CONFIRMED,
+      RESERVATION_STATUS.CANCELLED,
+      RESERVATION_STATUS.COMPLETED,
+    ];
+
+    if (
+      !validReservationStatuses.includes(
+        data.reservation_status as any
+      )
+    ) {
+      throw new BadRequestError(
+        "Invalid reservation status."
+      );
+    }
+
+    // ---------------------------------------------------
+    // Validate Payment Status
+    // ---------------------------------------------------
+
+    const validPaymentStatuses = [
+      PAYMENT_STATUS.UNPAID,
+      PAYMENT_STATUS.PARTIAL,
+      PAYMENT_STATUS.PAID,
+    ];
+
+    if (
+      !validPaymentStatuses.includes(
+        data.payment_status as any
+      )
+    ) {
+      throw new BadRequestError(
+        "Invalid payment status."
+      );
+    }
+
+    // ---------------------------------------------------
+    // Update
+    // ---------------------------------------------------
+
+    return await this.reservationRepository.updateStatus(
+      id,
+      data.reservation_status,
+      data.payment_status
+    );
+  }
 }

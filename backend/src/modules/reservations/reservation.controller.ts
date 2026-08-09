@@ -152,4 +152,29 @@ export class ReservationController {
       );
     }
   );
+
+  updateStatus = asyncHandler(
+    async (req: AuthRequest, res: Response) => {
+      const id = Number(req.params.id);
+
+      if (Number.isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid reservation ID.",
+        });
+      }
+
+      const reservation =
+        await this.reservationService.updateStatus(
+          id,
+          req.body
+        );
+
+      return ApiResponse.success(
+        res,
+        reservation,
+        "Reservation status updated successfully."
+      );
+    }
+  );
 }
