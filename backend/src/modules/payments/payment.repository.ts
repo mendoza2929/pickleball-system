@@ -9,122 +9,143 @@ export class PaymentRepository {
     reservation_id: number;
     amount: number;
     payment_method: string;
+    payment_proof?: string | null;
     status: string;
-    paymongo_payment_intent_id?: string;
-    paymongo_payment_method_id?: string;
   }) {
-    const uuid = randomUUID();
+    const uuid =
+      randomUUID();
 
-    const [result]: any = await pool.query(
-      `
-      INSERT INTO payments (
-        uuid,
-        reservation_id,
-        amount,
-        payment_method,
-        status,
-        paymongo_payment_intent_id,
-        paymongo_payment_method_id
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        uuid,
-        data.reservation_id,
-        data.amount,
-        data.payment_method,
-        data.status,
-        data.paymongo_payment_intent_id ?? null,
-        data.paymongo_payment_method_id ?? null,
-      ]
+    const [result]: any =
+      await pool.query(
+        `
+        INSERT INTO payments (
+          uuid,
+          reservation_id,
+          amount,
+          payment_method,
+          payment_proof,
+          status
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [
+          uuid,
+          data.reservation_id,
+          data.amount,
+          data.payment_method,
+          data.payment_proof ??
+            null,
+          data.status,
+        ]
+      );
+
+    return this.findById(
+      result.insertId
     );
-
-    return this.findById(result.insertId);
   }
 
   /**
    * Find payment by ID
    */
-  async findById(paymentId: number) {
-    const [rows]: any = await pool.query(
-      `
-      SELECT
-        p.id,
-        p.uuid,
-        p.reservation_id,
-        p.amount,
-        p.payment_method,
-        p.status,
-        p.paymongo_payment_intent_id,
-        p.paymongo_payment_method_id,
-        p.paid_at,
-        p.created_at,
-        p.updated_at
-      FROM payments p
-      WHERE p.id = ?
-      LIMIT 1
-      `,
-      [paymentId]
-    );
+  async findById(
+    paymentId: number
+  ) {
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          p.id,
+          p.uuid,
+          p.reservation_id,
+          p.amount,
+          p.payment_method,
+          p.payment_proof,
+          p.status,
+          p.paymongo_payment_intent_id,
+          p.paymongo_payment_method_id,
+          p.paid_at,
+          p.created_at,
+          p.updated_at
+        FROM payments p
+        WHERE p.id = ?
+        LIMIT 1
+        `,
+        [paymentId]
+      );
 
-    return rows[0] ?? undefined;
+    return (
+      rows[0] ?? undefined
+    );
   }
 
   /**
-   * Find payment by public UUID
+   * Find payment by UUID
    */
-  async getByUuid(uuid: string) {
-    const [rows]: any = await pool.query(
-      `
-      SELECT
-        p.id,
-        p.uuid,
-        p.reservation_id,
-        p.amount,
-        p.payment_method,
-        p.status,
-        p.paymongo_payment_intent_id,
-        p.paymongo_payment_method_id,
-        p.paid_at,
-        p.created_at,
-        p.updated_at
-      FROM payments p
-      WHERE p.uuid = ?
-      LIMIT 1
-      `,
-      [uuid]
-    );
+  async getByUuid(
+    uuid: string
+  ) {
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          p.id,
+          p.uuid,
+          p.reservation_id,
+          p.amount,
+          p.payment_method,
+          p.payment_proof,
+          p.status,
+          p.paymongo_payment_intent_id,
+          p.paymongo_payment_method_id,
+          p.paid_at,
+          p.created_at,
+          p.updated_at
+        FROM payments p
+        WHERE p.uuid = ?
+        LIMIT 1
+        `,
+        [uuid]
+      );
 
-    return rows[0] ?? undefined;
+    return (
+      rows[0] ?? undefined
+    );
   }
 
   /**
-   * Find latest payment belonging to a reservation
+   * Find latest payment
+   * belonging to reservation
    */
-  async findByReservationId(reservationId: number) {
-    const [rows]: any = await pool.query(
-      `
-      SELECT
-        p.id,
-        p.uuid,
-        p.reservation_id,
-        p.amount,
-        p.payment_method,
-        p.status,
-        p.paymongo_payment_intent_id,
-        p.paymongo_payment_method_id,
-        p.paid_at,
-        p.created_at,
-        p.updated_at
-      FROM payments p
-      WHERE p.reservation_id = ?
-      ORDER BY p.created_at DESC
-      LIMIT 1
-      `,
-      [reservationId]
-    );
+  async findByReservationId(
+    reservationId: number
+  ) {
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          p.id,
+          p.uuid,
+          p.reservation_id,
+          p.amount,
+          p.payment_method,
+          p.payment_proof,
+          p.status,
+          p.paymongo_payment_intent_id,
+          p.paymongo_payment_method_id,
+          p.paid_at,
+          p.created_at,
+          p.updated_at
+        FROM payments p
+        WHERE p.reservation_id = ?
+        ORDER BY p.created_at DESC
+        LIMIT 1
+        `,
+        [reservationId]
+      );
 
-    return rows[0] ?? undefined;
+    return (
+      rows[0] ?? undefined
+    );
   }
 
   /**
@@ -154,62 +175,8 @@ export class PaymentRepository {
       ]
     );
 
-    return this.findById(paymentId);
-  }
-
-  /**
-   * Find payment by PayMongo Payment Intent ID
-   */
-  async findByPayMongoPaymentIntentId(
-    paymentIntentId: string
-  ) {
-    const [rows]: any = await pool.query(
-      `
-      SELECT
-        p.id,
-        p.uuid,
-        p.reservation_id,
-        p.amount,
-        p.payment_method,
-        p.status,
-        p.paymongo_payment_intent_id,
-        p.paymongo_payment_method_id,
-        p.paid_at,
-        p.created_at,
-        p.updated_at
-      FROM payments p
-      WHERE p.paymongo_payment_intent_id = ?
-      LIMIT 1
-      `,
-      [paymentIntentId]
+    return this.findById(
+      paymentId
     );
-
-    return rows[0] ?? undefined;
-  }
-
-  /**
-   * Update PayMongo payment information
-   */
-  async updatePayMongoReference(
-    paymentId: number,
-    paymentIntentId: string,
-    paymentMethodId: string
-  ) {
-    await pool.query(
-      `
-      UPDATE payments
-      SET
-        paymongo_payment_intent_id = ?,
-        paymongo_payment_method_id = ?
-      WHERE id = ?
-      `,
-      [
-        paymentIntentId,
-        paymentMethodId,
-        paymentId,
-      ]
-    );
-
-    return this.findById(paymentId);
   }
 }

@@ -22,7 +22,7 @@ import {
   getCourtScheduleOverrides,
   CourtScheduleOverride,
 } from "@/lib/api/courtScheduleOverrides";
-
+import { useCourts } from "@/hooks/useCourts";
 const steps = [
   "Court",
   "Date",
@@ -43,11 +43,56 @@ export default function ReservationSteps() {
 
   const [selectedStartTime, setSelectedStartTime] =
      useState<string | null>(null);
-
+  
   const [selectedEndTime, setSelectedEndTime] =
     useState<string | null>(null);
+  
+  // Get courts
+  const { data: courts = [] } =
+    useCourts();
+
+  // Selected court
+  const selectedCourtData = courts.find(
+    (court) =>
+      court.id === selectedCourt
+  );
+
+  // Total amount
+  const totalAmount =
+    selectedCourtData &&
+    selectedStartTime &&
+    selectedEndTime
+      ? Number(
+          selectedCourtData.hourly_rate
+        ) *
+        (
+          (
+            Number(
+              selectedEndTime.split(":")[0]
+            ) * 60 +
+            Number(
+              selectedEndTime.split(":")[1]
+            )
+          ) -
+          (
+            Number(
+              selectedStartTime.split(":")[0]
+            ) * 60 +
+            Number(
+              selectedStartTime.split(":")[1]
+            )
+          )
+        ) /
+        60
+      : 0;
   const [paymentMethod, setPaymentMethod] =
-  useState<"GCASH" | null>(null);
+    useState<"GCASH" | null>(null);
+
+  const [paymentProof, setPaymentProof] =
+    useState<File | null>(null);
+
+  const [paymentProofPreview, setPaymentProofPreview] =
+    useState<string | null>(null);
   const [courtOverrides, setCourtOverrides] =
   useState<CourtScheduleOverride[]>([]);
   const [guest, setGuest] = useState({
@@ -90,6 +135,8 @@ useEffect(() => {
     return;
   }
 
+
+
   const loadCourtOverrides = async () => {
     try {
       const data =
@@ -108,6 +155,45 @@ useEffect(() => {
 
   loadCourtOverrides();
 }, [selectedCourt]);
+
+const handlePaymentProofChange = (
+  event: React.ChangeEvent<HTMLInputElement>
+) => {
+
+  const file =
+    event.target.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  // Only images
+  if (!file.type.startsWith("image/")) {
+    toast.error(
+      "Please upload an image file."
+    );
+
+    return;
+  }
+
+  // Maximum 5MB
+  if (file.size > 5 * 1024 * 1024) {
+    toast.error(
+      "Payment proof must be 5MB or smaller."
+    );
+
+    return;
+  }
+
+  setPaymentProof(file);
+
+  const previewUrl =
+    URL.createObjectURL(file);
+
+  setPaymentProofPreview(
+    previewUrl
+  );
+};
 const handleNextStep = async () => {
   if (isStepLoading) return;
 
@@ -180,6 +266,8 @@ const scrollToCurrentStep = (step: number) => {
     behavior: "smooth",
   });
 };
+
+
 const nextStep = () => {
   if (currentStep === 0 && !selectedCourt) {
     toast.error("Please select a court.");
@@ -196,17 +284,17 @@ const nextStep = () => {
     return;
   }
 
-  if (currentStep === 3) {
-    if (
-      !guest.guest_name.trim() ||
-      !guest.guest_email.trim() ||
-      !guest.guest_phone.trim()
-    ) {
-      toast.error("Please complete the guest information.");
+  if (currentStep === 5) {
+    if (!paymentMethod) {
+      toast.error("Please select a payment method.");
+      return;
+    }
+
+    if (paymentMethod === "GCASH" && !paymentProof) {
+      toast.error("Please upload your GCash proof of payment.");
       return;
     }
   }
-
   
 const next = Math.min(currentStep + 1, steps.length - 1);
 
@@ -237,6 +325,7 @@ function formatLocalDate(date: Date) {
 
   return `${year}-${month}-${day}`;
 }
+
 const submitReservation = async () => {
   if (
     !selectedCourt ||
@@ -247,10 +336,36 @@ const submitReservation = async () => {
     return;
   }
 
+  // ==========================================
+  // VALIDATE PAYMENT
+  // ==========================================
+
+  if (!paymentMethod) {
+    toast.error("Please select a payment method.");
+    return;
+  }
+
+  if (paymentMethod === "GCASH" && !paymentProof) {
+    toast.error(
+      "Please upload your GCash proof of payment."
+    );
+    return;
+  }
+
+  // TypeScript now knows this is a File
+  const proof = paymentProof;
+
+  if (!proof) {
+    toast.error(
+      "Please upload your GCash proof of payment."
+    );
+    return;
+  }
+
   try {
-    // -----------------------------------------
-    // 1. Create reservation
-    // -----------------------------------------
+    // ==========================================
+    // 1. CREATE RESERVATION
+    // ==========================================
 
     const reservationResult =
       await createReservation.mutateAsync({
@@ -278,72 +393,88 @@ const submitReservation = async () => {
           guest.remarks,
       });
 
-    // -----------------------------------------
-    // Get reservation ID
-    // -----------------------------------------
+    // ==========================================
+    // 2. GET RESERVATION
+    // ==========================================
 
-const reservation =
-  reservationResult?.data;
+    const reservation =
+      reservationResult?.data;
 
-const reservationId =
-  reservation?.id;
+    const reservationId =
+      reservation?.id;
 
-if (
-  !reservationId ||
-  !Number.isInteger(reservationId) ||
-  reservationId <= 0
-) {
-  console.error(
-    "Invalid reservation response:",
-    reservationResult
-  );
+    if (
+      !reservationId ||
+      !Number.isInteger(reservationId) ||
+      reservationId <= 0
+    ) {
+      console.error(
+        "Invalid reservation response:",
+        reservationResult
+      );
 
-  throw new Error(
-    "Reservation was created, but the reservation ID was not returned."
-  );
-}
+      throw new Error(
+        "Reservation was created, but the reservation ID was not returned."
+      );
+    }
 
-console.log(
-  "Reservation ID:",
-  reservationId
-);
+    // ==========================================
+    // 3. CREATE PAYMENT FORM DATA
+    // ==========================================
 
-// -----------------------------------------
-// Create GCash payment
-// -----------------------------------------
+    const formData = new FormData();
 
-const paymentResult =
-  await createPayment.mutateAsync({
-    reservation_id: reservationId,
-    payment_method: "GCASH",
-  });
+    formData.append(
+      "reservation_id",
+      String(reservationId)
+    );
 
-console.log(
-  "Payment created:",
-  paymentResult
-);
+    formData.append(
+      "payment_method",
+      "GCASH"
+    );
 
-// -----------------------------------------
-// Get Xendit checkout URL
-// -----------------------------------------
+    formData.append(
+      "proof",
+      proof
+    );
 
-const checkoutUrl =
-  paymentResult?.data?.checkout_url;
+    // ==========================================
+    // 4. UPLOAD PAYMENT PROOF
+    // ==========================================
 
-if (!checkoutUrl) {
-  throw new Error(
-    "Payment checkout URL was not returned."
-  );
-}
+    const paymentResult =
+      await createPayment.mutateAsync(
+        formData
+      );
 
-// -----------------------------------------
-// Redirect to Xendit
-// -----------------------------------------
+    console.log(
+      "Payment proof uploaded:",
+      paymentResult
+    );
 
-window.location.href =
-  checkoutUrl;
+    // ==========================================
+    // 5. SUCCESS MESSAGE
+    // ==========================================
+
+    toast.success(
+      "Payment proof uploaded successfully."
+    );
+
+    toast.success(
+      "Your reservation is pending confirmation. You will receive a message once it is confirmed."
+    );
+
+    // ==========================================
+    // 6. REDIRECT TO SUCCESS PAGE
+    // ==========================================
+
+    router.push(
+      `/reservation/success/${reservation.uuid}`
+    );
 
   } catch (error: any) {
+
     console.error(
       "Reservation/payment error:",
       error
@@ -599,32 +730,173 @@ window.location.href =
 
 {/* Payment */}
 
+{/* ============================================================
+    PAYMENT
+============================================================ */}
+{/* ============================================================
+    PAYMENT
+============================================================ */}
+
 {currentStep === 5 && (
   <div
     id="payment-step"
     className="scroll-mt-28"
   >
     <div className="mx-auto max-w-3xl">
+
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
+
       <div className="mb-8">
         <p className="text-sm font-medium uppercase tracking-wider text-lime-400">
           Payment
         </p>
 
         <h2 className="mt-2 text-3xl font-black">
-          Pay with GCash
+          GCash Payment
         </h2>
 
         <p className="mt-3 text-slate-400">
-          Complete your reservation securely using GCash.
+          Scan the owner's GCash QR code and upload
+          your payment proof to submit your reservation.
         </p>
       </div>
 
-      <div className="grid gap-4">
-        {/* GCash */}
+      {/* ======================================================
+          TOTAL AMOUNT
+      ====================================================== */}
+
+      <div
+        className="
+          mb-6
+          rounded-2xl
+          border
+          border-lime-400/30
+          bg-lime-400/10
+          p-6
+          text-center
+        "
+      >
+        <p className="text-sm text-slate-400">
+          Total Amount to Pay
+        </p>
+
+        <p className="mt-2 text-4xl font-black text-lime-400">
+          
+          {totalAmount.toLocaleString("en-PH", {
+              style: "currency",
+              currency: "PHP",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+        </p>
+
+        <p className="mt-2 text-xs text-slate-500">
+          Please pay the exact amount shown above.
+        </p>
+      </div>
+
+      {/* ======================================================
+          GCASH QR CODE
+      ====================================================== */}
+
+      <div
+        className="
+          mb-6
+          rounded-2xl
+          border
+          border-white/10
+          bg-white/5
+          p-6
+        "
+      >
+        <div className="text-center">
+
+          <h3 className="text-xl font-bold">
+            Scan to Pay
+          </h3>
+
+          <p className="mt-2 text-sm text-slate-400">
+            Scan the owner's GCash QR code using
+            your GCash application.
+          </p>
+
+        </div>
+
+        <div
+          className="
+            mx-auto
+            mt-6
+            flex
+            w-fit
+            items-center
+            justify-center
+            rounded-2xl
+            bg-white
+            p-4
+          "
+        >
+          <img
+             src="/images/Hero.png"
+            alt="Owner GCash QR Code"
+            className="
+              h-64
+              w-64
+              object-contain
+            "
+          />
+        </div>
+
+        {/* Amount reminder */}
+
+        <div
+          className="
+            mt-6
+            rounded-xl
+            border
+            border-white/10
+            bg-slate-950/70
+            p-4
+          "
+        >
+          <div className="flex items-center justify-between">
+
+            <span className="text-sm text-slate-400">
+              Amount to send
+            </span>
+
+            <span className="font-bold text-lime-400">
+              
+             {totalAmount.toLocaleString("en-PH", {
+                  style: "currency",
+                  currency: "PHP",
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+            </span>
+
+          </div>
+
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            After sending the payment, take a
+            screenshot of the successful GCash
+            transaction and upload it below.
+          </p>
+        </div>
+      </div>
+
+      {/* ======================================================
+          PAYMENT METHOD
+      ====================================================== */}
+
+      <div className="mb-6">
 
         <button
           type="button"
-          onClick={() => setPaymentMethod("GCASH")}
+          onClick={() =>
+            setPaymentMethod("GCASH")
+          }
           className={`
             w-full
             rounded-2xl
@@ -641,15 +913,19 @@ window.location.href =
             }
           `}
         >
+
           <div className="flex items-center justify-between">
+
             <div>
+
               <h3 className="text-xl font-bold">
                 GCash
               </h3>
 
               <p className="mt-2 text-sm text-slate-400">
-                Pay securely using GCash.
+                Upload your GCash payment screenshot.
               </p>
+
             </div>
 
             <div
@@ -669,17 +945,229 @@ window.location.href =
                 }
               `}
             >
+
               {paymentMethod === "GCASH" && (
-                <div className="h-3 w-3 rounded-full bg-lime-400" />
+                <div
+                  className="
+                    h-3
+                    w-3
+                    rounded-full
+                    bg-lime-400
+                  "
+                />
               )}
+
             </div>
+
           </div>
+
         </button>
+
       </div>
+
+      {/* ======================================================
+          UPLOAD PAYMENT PROOF
+      ====================================================== */}
+
+      {paymentMethod === "GCASH" && (
+        <div
+          className="
+            rounded-2xl
+            border
+            border-white/10
+            bg-white/5
+            p-6
+          "
+        >
+
+          <div className="mb-5">
+
+            <h3 className="text-lg font-semibold">
+              Proof of Payment
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Upload a screenshot showing your
+              completed GCash transaction.
+            </p>
+
+          </div>
+
+          <label
+            htmlFor="payment-proof"
+            className="
+              flex
+              min-h-[220px]
+              cursor-pointer
+              flex-col
+              items-center
+              justify-center
+              rounded-2xl
+              border
+              border-dashed
+              border-white/20
+              bg-slate-950/60
+              p-6
+              text-center
+              transition
+              hover:border-lime-400/50
+              hover:bg-slate-950
+            "
+          >
+
+            {paymentProofPreview ? (
+              <div className="w-full">
+
+                <img
+                  src={paymentProofPreview}
+                  alt="Payment proof preview"
+                  className="
+                    mx-auto
+                    max-h-[350px]
+                    rounded-xl
+                    object-contain
+                  "
+                />
+
+                <p
+                  className="
+                    mt-4
+                    truncate
+                    text-sm
+                    text-slate-400
+                  "
+                >
+                  {paymentProof?.name}
+                </p>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Click to replace image
+                </p>
+
+              </div>
+            ) : (
+              <>
+
+                <div
+                  className="
+                    mb-4
+                    flex
+                    h-14
+                    w-14
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-lime-400/10
+                    text-2xl
+                    text-lime-400
+                  "
+                >
+                  ↑
+                </div>
+
+                <p className="font-semibold">
+                  Upload payment proof
+                </p>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  PNG, JPG or JPEG
+                </p>
+
+                <p className="mt-1 text-xs text-slate-600">
+                  Maximum file size: 5MB
+                </p>
+
+              </>
+            )}
+
+          </label>
+
+          <input
+            id="payment-proof"
+            type="file"
+            accept="image/png,image/jpeg,image/jpg"
+            className="hidden"
+            onChange={
+              handlePaymentProofChange
+            }
+          />
+
+        </div>
+      )}
+
+      {/* ======================================================
+          IMPORTANT NOTICE
+      ====================================================== */}
+
+      <div
+        className="
+          mt-6
+          rounded-2xl
+          border
+          border-amber-400/20
+          bg-amber-400/5
+          p-5
+        "
+      >
+
+        <div className="flex gap-3">
+
+          <div
+            className="
+              flex
+              h-8
+              w-8
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-amber-400/10
+              font-bold
+              text-amber-400
+            "
+          >
+            !
+          </div>
+
+          <div>
+
+            <h4 className="font-semibold text-amber-300">
+              Important Reservation Notice
+            </h4>
+
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Your reservation will remain{" "}
+              <span className="font-semibold text-white">
+                Pending
+              </span>{" "}
+              until your payment proof has been
+              reviewed.
+            </p>
+
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              You will receive a message once your
+              reservation has been confirmed.
+            </p>
+
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              If your reservation is not confirmed
+              within{" "}
+              <span className="font-semibold text-amber-300">
+                24 hours
+              </span>
+              , the reservation will be
+              automatically cancelled.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
   </div>
 )}
-
 
           {/* Footer */}
 
@@ -765,10 +1253,10 @@ window.location.href =
       <ArrowRight className="h-4 w-4" />
     </>
   ) : (
-    <>
-      Pay with GCash
-      <ArrowRight className="h-4 w-4" />
-    </>
+     <>
+        Submit Payment Proof
+        <ArrowRight className="h-4 w-4" />
+      </>
   )}
 </button>
 

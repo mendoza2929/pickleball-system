@@ -11,7 +11,8 @@ export class PaymentController {
   private paymentService: PaymentService;
 
   constructor() {
-    this.paymentService = new PaymentService();
+    this.paymentService =
+      new PaymentService();
   }
 
   /**
@@ -19,8 +20,11 @@ export class PaymentController {
    *
    * Create GCash payment
    *
-   * Guest reservations are allowed,
-   * so authentication is optional.
+   * multipart/form-data
+   *
+   * reservation_id
+   * payment_method
+   * proof
    */
   create = asyncHandler(
     async (
@@ -28,31 +32,41 @@ export class PaymentController {
       res: Response
     ) => {
       // -----------------------------------------
-      // Validate request body
+      // Validate body
       // -----------------------------------------
 
-      const data = createPaymentSchema.parse(
-        req.body
-      );
+      const data =
+        createPaymentSchema.parse(
+          req.body
+        );
 
       // -----------------------------------------
-      // Create PayMongo payment
+      // Validate uploaded proof
+      // -----------------------------------------
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Payment proof is required.",
+        });
+      }
+
+      // -----------------------------------------
+      // Create payment
       // -----------------------------------------
 
       const result =
-      await this.paymentService.create(
-        req.user?.id ?? null,
-        data
-      );
-
-      // -----------------------------------------
-      // Return payment information
-      // -----------------------------------------
+        await this.paymentService.create(
+          req.user?.id ?? null,
+          data,
+          req.file
+        );
 
       return ApiResponse.success(
         res,
         result,
-        "Payment created successfully.",
+        "Payment proof uploaded successfully.",
         201
       );
     }
@@ -87,7 +101,7 @@ export class PaymentController {
   /**
    * GET /api/payments/reservation/:reservationId
    *
-   * Get payment for a reservation
+   * Get payment for reservation
    */
   getByReservation =
     asyncHandler(
@@ -95,10 +109,6 @@ export class PaymentController {
         req: AuthRequest,
         res: Response
       ) => {
-        // -----------------------------------------
-        // Authentication check
-        // -----------------------------------------
-
         if (!req.user?.id) {
           return res.status(401).json({
             success: false,
@@ -107,17 +117,10 @@ export class PaymentController {
           });
         }
 
-        // -----------------------------------------
-        // Get reservation ID from URL
-        // -----------------------------------------
-
-        const reservationId = Number(
-          req.params.reservationId
-        );
-
-        // -----------------------------------------
-        // Validate reservation ID
-        // -----------------------------------------
+        const reservationId =
+          Number(
+            req.params.reservationId
+          );
 
         if (
           !Number.isInteger(
@@ -132,18 +135,10 @@ export class PaymentController {
           });
         }
 
-        // -----------------------------------------
-        // Get payment
-        // -----------------------------------------
-
         const payment =
           await this.paymentService.getByReservation(
             reservationId
           );
-
-        // -----------------------------------------
-        // Return payment
-        // -----------------------------------------
 
         return ApiResponse.success(
           res,

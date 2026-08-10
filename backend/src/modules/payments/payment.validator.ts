@@ -6,13 +6,14 @@ export const PAYMENT_METHOD = {
 
 export const createPaymentSchema =
   z.object({
-    reservation_id:
-      z.number().int().positive(),
+    reservation_id: z.coerce
+      .number()
+      .int()
+      .positive(),
 
-    payment_method:
-      z.enum([
-        PAYMENT_METHOD.GCASH,
-      ]),
+    payment_method: z.enum([
+      PAYMENT_METHOD.GCASH,
+    ]),
   });
 
 export type CreatePaymentInput =

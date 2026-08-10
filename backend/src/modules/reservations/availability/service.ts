@@ -389,7 +389,7 @@ export class ReservationAvailabilityService {
         FROM reservations
         WHERE court_id = ?
           AND reservation_date = ?
-          AND reservation_status != 'Cancelled'
+          AND reservation_status IN ('Pending', 'Confirmed')
         ORDER BY start_time ASC
         `,
         [

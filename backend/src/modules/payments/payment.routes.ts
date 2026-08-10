@@ -5,6 +5,8 @@ import { PaymentController } from "./payment.controller";
 import { optionalAuthenticate } from "../../middleware/optionalAuthenticate";
 import { authenticate } from "../../middleware/authenticate";
 
+import { uploadPaymentProof } from "../../middleware/uploadPaymentProof";
+
 const router = Router();
 
 const paymentController =
@@ -15,12 +17,18 @@ const paymentController =
  *
  * Create GCash payment
  *
- * Guest reservations are allowed,
- * so authentication is optional.
+ * multipart/form-data:
+ *
+ * reservation_id
+ * payment_method
+ * proof
+ *
+ * Guest reservations are allowed.
  */
 router.post(
   "/",
   optionalAuthenticate,
+  uploadPaymentProof.single("proof"),
   paymentController.create
 );
 
@@ -37,7 +45,7 @@ router.get(
 /**
  * GET /api/payments/reservation/:reservationId
  *
- * Authenticated user's payment
+ * Authenticated payment lookup
  */
 router.get(
   "/reservation/:reservationId",
