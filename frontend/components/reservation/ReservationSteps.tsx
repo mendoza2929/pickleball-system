@@ -18,6 +18,11 @@ import {
 } from "next/navigation";
 import { useCourtSchedules } from "@/hooks/useCourtSchedules";
 import { formatTime } from "@/utils/time";
+import {
+  getCourtScheduleOverrides,
+  CourtScheduleOverride,
+} from "@/lib/api/courtScheduleOverrides";
+
 const steps = [
   "Court",
   "Date",
@@ -43,6 +48,8 @@ export default function ReservationSteps() {
     useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] =
   useState<"GCASH" | null>(null);
+  const [courtOverrides, setCourtOverrides] =
+  useState<CourtScheduleOverride[]>([]);
   const [guest, setGuest] = useState({
     guest_name: "",
     guest_email: "",
@@ -77,7 +84,30 @@ useEffect(() => {
   );
 }, [courtId]);
 
+useEffect(() => {
+  if (!selectedCourt) {
+    setCourtOverrides([]);
+    return;
+  }
 
+  const loadCourtOverrides = async () => {
+    try {
+      const data =
+        await getCourtScheduleOverrides(selectedCourt);
+
+      setCourtOverrides(data);
+    } catch (error) {
+      console.error(
+        "Failed to load court schedule overrides:",
+        error
+      );
+
+      setCourtOverrides([]);
+    }
+  };
+
+  loadCourtOverrides();
+}, [selectedCourt]);
 const handleNextStep = async () => {
   if (isStepLoading) return;
 
@@ -438,12 +468,13 @@ window.location.href =
       id="date-step"
       className="scroll-mt-28"
     >
-      <DateSelector
-        courtId={selectedCourt}
-        schedules={courtSchedules}
-        selectedDate={selectedDate}
-        onSelect={setSelectedDate}
-      />
+     <DateSelector
+      courtId={selectedCourt}
+      schedules={courtSchedules}
+      overrides={courtOverrides}
+      selectedDate={selectedDate}
+      onSelect={setSelectedDate}
+    />
     </div>
   )}
 

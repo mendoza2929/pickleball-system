@@ -94,50 +94,212 @@ export class ReservationAvailabilityService {
       days[date.getDay()];
 
     // =====================================================
-    // GET COURT SCHEDULE
+    // COURT STATUS
     // =====================================================
+    //
+    // Maintenance / Inactive courts cannot be reserved.
+    //
 
-    const schedule =
-      await this.courtScheduleRepository
-        .findByCourtAndDay(
-          courtId,
-          dayOfWeek
-        );
-
-    // =====================================================
-    // NO SCHEDULE
-    // =====================================================
-
-    if (!schedule) {
+    if (court.status !== "Available") {
       return {
         court_id: courtId,
         court_name: court.name,
-        reservation_date: reservationDate,
+        reservation_date:
+          reservationDate,
         day_of_week: dayOfWeek,
-        duration_hours: durationHours,
+        duration_hours:
+          durationHours,
         is_closed: true,
         open_time: null,
         close_time: null,
         available_slots: [],
+        schedule_source:
+          "court_status",
+        reason:
+          court.status ===
+          "Maintenance"
+            ? "Court is under maintenance."
+            : "Court is inactive.",
       };
     }
 
     // =====================================================
-    // COURT CLOSED
+    // GET DATE OVERRIDE
+    // =====================================================
+    //
+    // Priority:
+    //
+    // 1. Court-specific override
+    // 2. Global holiday
+    //
+    // Example:
+    //
+    // court_id = 7
+    // date = 2026-08-20
+    //
+    // takes priority over:
+    //
+    // court_id = NULL
+    // date = 2026-08-20
+    //
+
+    const [overrideRows]: any =
+      await pool.query(
+        `
+        SELECT
+          cso.id,
+          cso.court_id,
+          cso.schedule_date,
+          cso.open_time,
+          cso.close_time,
+          cso.is_closed,
+          cso.reason
+        FROM court_schedule_overrides cso
+        WHERE DATE(cso.schedule_date) = ?
+          AND (
+            cso.court_id = ?
+            OR cso.court_id IS NULL
+          )
+        ORDER BY
+          CASE
+            WHEN cso.court_id = ? THEN 1
+            WHEN cso.court_id IS NULL THEN 2
+            ELSE 3
+          END
+        LIMIT 1
+        `,
+        [
+          reservationDate,
+          courtId,
+          courtId,
+        ]
+      );
+
+    const override =
+      overrideRows[0] ?? null;
+
+    // =====================================================
+    // DETERMINE SCHEDULE
     // =====================================================
 
-    if (schedule.is_closed) {
+    let openTime: string | null;
+    let closeTime: string | null;
+    let isClosed: boolean;
+
+    let scheduleSource:
+      | "override"
+      | "weekly";
+
+    let reason: string | null;
+
+    // =====================================================
+    // DATE OVERRIDE EXISTS
+    // =====================================================
+
+    if (override) {
+      openTime =
+        override.open_time;
+
+      closeTime =
+        override.close_time;
+
+      isClosed =
+        Boolean(
+          override.is_closed
+        );
+
+      scheduleSource =
+        "override";
+
+      reason =
+        override.reason ?? null;
+    }
+
+    // =====================================================
+    // NO OVERRIDE
+    // USE WEEKLY SCHEDULE
+    // =====================================================
+
+    else {
+      const schedule =
+        await this.courtScheduleRepository
+          .findByCourtAndDay(
+            courtId,
+            dayOfWeek
+          );
+
+      // ===================================================
+      // NO WEEKLY SCHEDULE
+      // ===================================================
+
+      if (!schedule) {
+        return {
+          court_id: courtId,
+          court_name: court.name,
+          reservation_date:
+            reservationDate,
+          day_of_week: dayOfWeek,
+          duration_hours:
+            durationHours,
+          is_closed: true,
+          open_time: null,
+          close_time: null,
+          available_slots: [],
+          schedule_source:
+            "weekly",
+          reason:
+            "Court has no operating schedule.",
+        };
+      }
+
+      openTime =
+        schedule.open_time;
+
+      closeTime =
+        schedule.close_time;
+
+      isClosed =
+        Boolean(
+          schedule.is_closed
+        );
+
+      scheduleSource =
+        "weekly";
+
+      reason = null;
+    }
+
+    // =====================================================
+    // CLOSED
+    // =====================================================
+
+    if (isClosed) {
       return {
         court_id: courtId,
         court_name: court.name,
-        reservation_date: reservationDate,
+        reservation_date:
+          reservationDate,
         day_of_week: dayOfWeek,
-        duration_hours: durationHours,
+        duration_hours:
+          durationHours,
         is_closed: true,
-        open_time: schedule.open_time,
-        close_time: schedule.close_time,
+        open_time: null,
+        close_time: null,
         available_slots: [],
+        schedule_source:
+          scheduleSource,
+        reason,
       };
+    }
+
+    // =====================================================
+    // VALIDATE OPENING HOURS
+    // =====================================================
+
+    if (!openTime || !closeTime) {
+      throw new BadRequestError(
+        "Court schedule has invalid operating hours."
+      );
     }
 
     // =====================================================
@@ -147,11 +309,13 @@ export class ReservationAvailabilityService {
     const timeToMinutes = (
       value: string
     ): number => {
-      const [hours, minutes] =
-        value
-          .slice(0, 5)
-          .split(":")
-          .map(Number);
+      const [
+        hours,
+        minutes,
+      ] = value
+        .slice(0, 5)
+        .split(":")
+        .map(Number);
 
       return (
         hours * 60 +
@@ -171,8 +335,14 @@ export class ReservationAvailabilityService {
         totalMinutes % 60;
 
       return (
-        `${String(hours).padStart(2, "0")}:` +
-        `${String(minutes).padStart(2, "0")}`
+        `${String(hours).padStart(
+          2,
+          "0"
+        )}:` +
+        `${String(minutes).padStart(
+          2,
+          "0"
+        )}`
       );
     };
 
@@ -182,20 +352,24 @@ export class ReservationAvailabilityService {
 
     const openMinutes =
       timeToMinutes(
-        schedule.open_time
+        openTime
       );
 
     const closeMinutes =
       timeToMinutes(
-        schedule.close_time
+        closeTime
       );
 
     const durationMinutes =
       durationHours * 60;
 
-    // Invalid schedule protection
+    // =====================================================
+    // INVALID SCHEDULE PROTECTION
+    // =====================================================
+
     if (
-      openMinutes >= closeMinutes
+      openMinutes >=
+      closeMinutes
     ) {
       throw new BadRequestError(
         "Invalid court operating hours."
@@ -248,66 +422,45 @@ export class ReservationAvailabilityService {
     // GENERATE AVAILABLE SLOTS
     // =====================================================
 
-    const availableSlots: AvailableSlot[] =
-      [];
-
-    /*
-     * Example:
-     *
-     * Open:
-     * 09:00
-     *
-     * Close:
-     * 22:00
-     *
-     * Duration:
-     * 1 hour
-     *
-     * Generated slots:
-     *
-     * 09:00 - 10:00
-     * 10:00 - 11:00
-     * 11:00 - 12:00
-     * 12:00 - 13:00
-     * 13:00 - 14:00
-     * 14:00 - 15:00
-     * 15:00 - 16:00
-     * 16:00 - 17:00
-     * 17:00 - 18:00
-     * 18:00 - 19:00
-     * 19:00 - 20:00
-     * 20:00 - 21:00
-     * 21:00 - 22:00
-     */
+    const availableSlots:
+      AvailableSlot[] = [];
 
     for (
-      let startMinutes = openMinutes;
-      startMinutes + durationMinutes <=
+      let startMinutes =
+        openMinutes;
+
+      startMinutes +
+        durationMinutes <=
         closeMinutes;
+
       startMinutes += 60
     ) {
       const endMinutes =
         startMinutes +
         durationMinutes;
 
-      // =================================================
+      // ===================================================
       // DO NOT SHOW PAST TIMES FOR TODAY
-      // =================================================
+      // ===================================================
 
       if (
-        reservationDate === today &&
-        startMinutes <= currentMinutes
+        reservationDate ===
+          today &&
+        startMinutes <=
+          currentMinutes
       ) {
         continue;
       }
 
-      // =================================================
+      // ===================================================
       // CHECK RESERVATION CONFLICT
-      // =================================================
+      // ===================================================
 
       const hasConflict =
         rows.some(
-          (reservation: any) => {
+          (
+            reservation: any
+          ) => {
             const existingStart =
               timeToMinutes(
                 reservation.start_time
@@ -339,9 +492,9 @@ export class ReservationAvailabilityService {
         continue;
       }
 
-      // =================================================
+      // ===================================================
       // ADD AVAILABLE SLOT
-      // =================================================
+      // ===================================================
 
       availableSlots.push({
         start_time:
@@ -378,13 +531,18 @@ export class ReservationAvailabilityService {
       is_closed: false,
 
       open_time:
-        schedule.open_time,
+        openTime,
 
       close_time:
-        schedule.close_time,
+        closeTime,
 
       available_slots:
         availableSlots,
+
+      schedule_source:
+        scheduleSource,
+
+      reason,
     };
   }
 }

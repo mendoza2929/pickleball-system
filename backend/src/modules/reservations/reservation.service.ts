@@ -12,6 +12,7 @@ import { BadRequestError } from "../../shared/errors/BadRequestError";
 import { ConflictError } from "../../shared/errors/ConflictError";
 import { NotFoundError } from "../../shared/errors/NotFoundError";
 
+
 import {
   PAYMENT_STATUS,
 } from "../../constants/payment-status";
@@ -28,6 +29,7 @@ import { CourtScheduleRepository } from "../court-schedules/courtSchedule.reposi
 
 import { getDayOfWeek } from "../../shared/utils/date";
 import { timeToMinutes } from "../../shared/utils/time";
+import { CourtScheduleOverrideRepository } from "../courtScheduleOverrides/courtScheduleOverride.repository";
 
 export class ReservationService {
 
@@ -39,6 +41,9 @@ export class ReservationService {
 
   private courtScheduleRepository =
     new CourtScheduleRepository();
+
+  private courtScheduleOverrideRepository =
+  new CourtScheduleOverrideRepository();
 
 
   /**
@@ -101,7 +106,7 @@ export class ReservationService {
     }
 
 
-    // ---------------------------------------------------
+   // ---------------------------------------------------
     // Court Schedule
     // ---------------------------------------------------
 
@@ -110,22 +115,88 @@ export class ReservationService {
         data.reservation_date
       );
 
-    const schedule =
-      await this.courtScheduleRepository
-        .findByCourtAndDay(
+    // ---------------------------------------------------
+    // Specific Date Override
+    // ---------------------------------------------------
+
+    const override =
+      await this.courtScheduleOverrideRepository
+        .findByCourtAndDate(
           court.id,
-          day
+          data.reservation_date
         );
 
-    if (!schedule) {
-      throw new BadRequestError(
-        "Court has no operating schedule."
-      );
+    // ---------------------------------------------------
+    // Determine Effective Schedule
+    // ---------------------------------------------------
+
+    let schedule;
+
+    if (override) {
+      // Specific date override wins
+      schedule = {
+        open_time:
+          override.open_time,
+
+        close_time:
+          override.close_time,
+
+        is_closed:
+          Boolean(
+            override.is_closed
+          ),
+      };
+    } else {
+      // No override → use normal weekly schedule
+      schedule =
+        await this.courtScheduleRepository
+          .findByCourtAndDay(
+            court.id,
+            day
+          );
+
+      if (!schedule) {
+        throw new BadRequestError(
+          "Court has no operating schedule."
+        );
+      }
+
+      schedule = {
+        open_time:
+          schedule.open_time,
+
+        close_time:
+          schedule.close_time,
+
+        is_closed:
+          Boolean(
+            schedule.is_closed
+          ),
+      };
     }
+
+    // ---------------------------------------------------
+    // Court Closed
+    // ---------------------------------------------------
 
     if (schedule.is_closed) {
       throw new BadRequestError(
-        "Court is closed on this day."
+        override
+          ? `Court is closed on ${data.reservation_date}.`
+          : "Court is closed on this day."
+      );
+    }
+
+    // ---------------------------------------------------
+    // Validate Operating Hours
+    // ---------------------------------------------------
+
+    if (
+      !schedule.open_time ||
+      !schedule.close_time
+    ) {
+      throw new BadRequestError(
+        "Court schedule has invalid operating hours."
       );
     }
 

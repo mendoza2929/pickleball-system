@@ -5,6 +5,10 @@ import { AvailabilityService } from "./availability.service";
 import { asyncHandler } from "../../shared/utils/asyncHandler";
 import { ApiResponse } from "../../utils/apiResponse";
 
+import {
+  availabilityQuerySchema,
+} from "./availability.validator";
+
 export class AvailabilityController {
   private availabilityService =
     new AvailabilityService();
@@ -13,19 +17,32 @@ export class AvailabilityController {
    * GET /api/availability
    *
    * Query:
+   *
    * ?courtId=1
    * &date=2026-08-15
    */
   getAvailability = asyncHandler(
-    async (req: Request, res: Response) => {
-      const courtId = Number(req.query.courtId);
+    async (
+      req: Request,
+      res: Response
+    ) => {
+      //------------------------------------
+      // Validate Query
+      //------------------------------------
 
-      const date = String(req.query.date);
+      const query =
+        availabilityQuerySchema.parse(
+          req.query
+        );
+
+      //------------------------------------
+      // Get Availability
+      //------------------------------------
 
       const result =
         await this.availabilityService.getAvailability(
-          courtId,
-          date
+          query.courtId,
+          query.date
         );
 
       return ApiResponse.success(

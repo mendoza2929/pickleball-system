@@ -7,7 +7,8 @@ import { getDayOfWeek } from "../../shared/utils/date";
 import { timeToMinutes } from "../../shared/utils/time";
 
 export class AvailabilityService {
-  private repository = new AvailabilityRepository();
+  private repository =
+    new AvailabilityRepository();
 
   /**
    * Get Available Time Slots
@@ -21,7 +22,9 @@ export class AvailabilityService {
     //------------------------------------
 
     const court =
-      await this.repository.getCourt(courtId);
+      await this.repository.getCourt(
+        courtId
+      );
 
     if (!court) {
       throw new NotFoundError(
@@ -33,25 +36,95 @@ export class AvailabilityService {
     // Day of Week
     //------------------------------------
 
-    const day = getDayOfWeek(
-      reservationDate
-    );
-
-    //------------------------------------
-    // Weekly Schedule
-    //------------------------------------
-
-    const schedule =
-      await this.repository.getSchedule(
-        courtId,
-        day
+    const day =
+      getDayOfWeek(
+        reservationDate
       );
 
-    if (!schedule) {
-      throw new BadRequestError(
-        "Court has no operating schedule."
-      );
+    //------------------------------------
+    // Court Status
+    //------------------------------------
+
+    if (court.status !== "Available") {
+      return {
+        court,
+        date: reservationDate,
+        day,
+        open_time: null,
+        close_time: null,
+        slots: [],
+        schedule_source: "court_status",
+        reason:
+          court.status === "Maintenance"
+            ? "Court is under maintenance."
+            : "Court is inactive.",
+      };
     }
+
+    //------------------------------------
+    // Specific Date Override
+    //------------------------------------
+
+    const override =
+      await this.repository.getScheduleOverride(
+        courtId,
+        reservationDate
+      );
+
+    //------------------------------------
+    // Determine Schedule
+    //------------------------------------
+
+    let schedule;
+
+    if (override) {
+      schedule = {
+        open_time:
+          override.open_time,
+
+        close_time:
+          override.close_time,
+
+        is_closed:
+          Boolean(
+            override.is_closed
+          ),
+
+        reason:
+          override.reason,
+      };
+    } else {
+      schedule =
+        await this.repository.getSchedule(
+          courtId,
+          day
+        );
+
+      if (!schedule) {
+        throw new BadRequestError(
+          "Court has no operating schedule."
+        );
+      }
+
+      schedule = {
+        open_time:
+          schedule.open_time,
+
+        close_time:
+          schedule.close_time,
+
+        is_closed:
+          Boolean(
+            schedule.is_closed
+          ),
+
+        reason: null,
+      };
+    }
+
+    //------------------------------------
+    // Court Closed
+    //------------------------------------
 
     if (schedule.is_closed) {
       return {
@@ -61,7 +134,26 @@ export class AvailabilityService {
         open_time: null,
         close_time: null,
         slots: [],
+        schedule_source:
+          override
+            ? "override"
+            : "weekly",
+        reason:
+          override?.reason ?? null,
       };
+    }
+
+    //------------------------------------
+    // Validate Schedule Times
+    //------------------------------------
+
+    if (
+      !schedule.open_time ||
+      !schedule.close_time
+    ) {
+      throw new BadRequestError(
+        "Court schedule has invalid operating hours."
+      );
     }
 
     //------------------------------------
@@ -85,44 +177,76 @@ export class AvailabilityService {
     }[] = [];
 
     let current =
-      timeToMinutes(schedule.open_time);
+      timeToMinutes(
+        schedule.open_time
+      );
 
     const closing =
-      timeToMinutes(schedule.close_time);
+      timeToMinutes(
+        schedule.close_time
+      );
 
-    while (current < closing) {
-      const end = current + 60;
+    //------------------------------------
+    // Generate 60-Minute Slots
+    //------------------------------------
+
+    while (
+      current + 60 <= closing
+    ) {
+      const end =
+        current + 60;
 
       const startTime =
-        this.minutesToTime(current);
+        this.minutesToTime(
+          current
+        );
 
       const endTime =
-        this.minutesToTime(end);
+        this.minutesToTime(
+          end
+        );
 
       const reserved =
-        reservations.some((reservation: any) => {
-          return (
-            reservation.start_time < endTime &&
-            reservation.end_time > startTime
-          );
-        });
+        reservations.some(
+          (reservation: any) => {
+            return (
+              reservation.start_time <
+                endTime &&
+              reservation.end_time >
+                startTime
+            );
+          }
+        );
 
       slots.push({
         start: startTime,
         end: endTime,
-        available: !reserved,
+        available:
+          !reserved,
       });
 
       current += 60;
     }
 
+    //------------------------------------
+    // Return
+    //------------------------------------
+
     return {
       court,
       date: reservationDate,
       day,
-      open_time: schedule.open_time,
-      close_time: schedule.close_time,
+      open_time:
+        schedule.open_time,
+      close_time:
+        schedule.close_time,
       slots,
+      schedule_source:
+        override
+          ? "override"
+          : "weekly",
+      reason:
+        override?.reason ?? null,
     };
   }
 
@@ -132,13 +256,18 @@ export class AvailabilityService {
   private minutesToTime(
     minutes: number
   ) {
-    const hours = Math.floor(minutes / 60);
+    const hours =
+      Math.floor(minutes / 60);
 
-    const mins = minutes % 60;
+    const mins =
+      minutes % 60;
 
     return `${String(hours).padStart(
       2,
       "0"
-    )}:${String(mins).padStart(2, "0")}`;
+    )}:${String(mins).padStart(
+      2,
+      "0"
+    )}`;
   }
 }

@@ -46,6 +46,44 @@ export class AvailabilityRepository {
     return rows[0];
   }
 
+    async getScheduleOverride(
+    courtId: number,
+    reservationDate: string
+  ) {
+    const [rows]: any = await pool.query(
+      `
+      SELECT
+        cso.id,
+        cso.court_id,
+        cso.schedule_date,
+        cso.open_time,
+        cso.close_time,
+        cso.is_closed,
+        cso.reason
+      FROM court_schedule_overrides cso
+      WHERE cso.schedule_date = ?
+        AND (
+          cso.court_id = ?
+          OR cso.court_id IS NULL
+        )
+      ORDER BY
+        CASE
+          WHEN cso.court_id = ? THEN 1
+          WHEN cso.court_id IS NULL THEN 2
+          ELSE 3
+        END
+      LIMIT 1
+      `,
+      [
+        reservationDate,
+        courtId,
+        courtId,
+      ]
+    );
+
+    return rows[0] ?? null;
+  }
+
   /**
    * Get Existing Reservations
    */
