@@ -26,21 +26,19 @@ export class PaymentService {
     data: CreatePaymentInput,
     proof: Express.Multer.File
   ) {
-    // -----------------------------------------
+    // =====================================================
     // 1. Validate payment method
-    // -----------------------------------------
+    // =====================================================
 
-    if (
-      data.payment_method !== "GCASH"
-    ) {
+    if (data.payment_method !== "GCASH") {
       throw new BadRequestError(
         "Only GCash payment is currently supported."
       );
     }
 
-    // -----------------------------------------
+    // =====================================================
     // 2. Validate proof
-    // -----------------------------------------
+    // =====================================================
 
     if (!proof) {
       throw new BadRequestError(
@@ -48,9 +46,9 @@ export class PaymentService {
       );
     }
 
-    // -----------------------------------------
+    // =====================================================
     // 3. Find reservation
-    // -----------------------------------------
+    // =====================================================
 
     const reservation =
       await this.reservationRepository.findById(
@@ -63,25 +61,24 @@ export class PaymentService {
       );
     }
 
-    // -----------------------------------------
+    // =====================================================
     // 4. Check ownership
-    // -----------------------------------------
+    // =====================================================
 
     if (
       reservation.user_id !== null &&
       reservation.user_id !== undefined &&
       userId !== null &&
-      Number(reservation.user_id) !==
-        Number(userId)
+      Number(reservation.user_id) !== Number(userId)
     ) {
       throw new BadRequestError(
         "You are not allowed to pay for this reservation."
       );
     }
 
-    // -----------------------------------------
+    // =====================================================
     // 5. Validate reservation amount
-    // -----------------------------------------
+    // =====================================================
 
     const amount = Number(
       reservation.total_amount
@@ -96,16 +93,15 @@ export class PaymentService {
       );
     }
 
-    // -----------------------------------------
+    // =====================================================
     // 6. Check existing payment
-    // -----------------------------------------
+    // =====================================================
 
     const existingPayment =
       await this.paymentRepository.findByReservationId(
         data.reservation_id
       );
 
-    // Already paid
     if (
       existingPayment &&
       existingPayment.status === "Paid"
@@ -115,7 +111,6 @@ export class PaymentService {
       );
     }
 
-    // Already has pending payment
     if (
       existingPayment &&
       existingPayment.status === "Pending"
@@ -125,16 +120,16 @@ export class PaymentService {
       );
     }
 
-    // -----------------------------------------
-    // 7. Payment proof path
-    // -----------------------------------------
+    // =====================================================
+    // 7. Save uploaded proof path
+    // =====================================================
 
     const paymentProof =
       `/uploads/payment-proofs/${proof.filename}`;
 
-    // -----------------------------------------
-    // 8. Create local payment
-    // -----------------------------------------
+    // =====================================================
+    // 8. Create payment
+    // =====================================================
 
     const payment =
       await this.paymentRepository.createPayment({
@@ -153,9 +148,9 @@ export class PaymentService {
           "Pending",
       });
 
-    // -----------------------------------------
-    // 9. Return
-    // -----------------------------------------
+    // =====================================================
+    // 9. Return payment
+    // =====================================================
 
     return {
       payment,

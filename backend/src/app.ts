@@ -19,7 +19,41 @@ const app = express();
 
 app.use(cors());
 
-app.use(helmet());
+app.use(
+  helmet({
+    // Allow frontend (localhost:3000)
+    // to display resources from backend (localhost:5000)
+    crossOriginResourcePolicy: {
+      policy: "cross-origin",
+    },
+
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+
+        imgSrc: [
+          "'self'",
+          "data:",
+          "blob:",
+          "http://localhost:5000",
+        ],
+
+        scriptSrc: ["'self'"],
+
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+        ],
+
+        connectSrc: [
+          "'self'",
+          "http://localhost:3000",
+          "http://localhost:5000",
+        ],
+      },
+    },
+  })
+);
 
 app.use(morgan("dev"));
 
@@ -40,10 +74,7 @@ app.use(cookieParser());
 app.use(
   "/uploads",
   express.static(
-    path.join(
-      process.cwd(),
-      "uploads"
-    )
+    path.join(process.cwd(), "uploads")
   )
 );
 
@@ -54,8 +85,7 @@ app.use(
 app.get("/", (_, res) => {
   res.json({
     success: true,
-    message:
-      "Pickleball API is running.",
+    message: "Pickleball API is running.",
   });
 });
 
@@ -63,10 +93,7 @@ app.get("/", (_, res) => {
 // API ROUTES
 // =====================================================
 
-app.use(
-  "/api",
-  routes
-);
+app.use("/api", routes);
 
 // =====================================================
 // ERROR HANDLER

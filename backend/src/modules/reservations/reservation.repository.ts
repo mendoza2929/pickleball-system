@@ -343,43 +343,59 @@
      * Reservation Details
      * =====================================================
      */
-    async findById(id: number) {
-      const [rows]: any =
-        await pool.query(
-          `
-          SELECT
-            r.*,
+  async findById(id: number) {
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          r.*,
 
-            c.name AS court_name,
+          c.name AS court_name,
 
-            CASE
-              WHEN r.user_id IS NOT NULL THEN
-                CONCAT(
-                  u.first_name,
-                  ' ',
-                  u.last_name
-                )
-              ELSE
-                r.guest_name
-            END AS player_name
+          CASE
+            WHEN r.user_id IS NOT NULL THEN
+              CONCAT(
+                u.first_name,
+                ' ',
+                u.last_name
+              )
+            ELSE
+              r.guest_name
+          END AS player_name,
 
-          FROM reservations r
+          (
+            SELECT p.payment_method
+            FROM payments p
+            WHERE p.reservation_id = r.id
+            ORDER BY p.id DESC
+            LIMIT 1
+          ) AS payment_method,
 
-          INNER JOIN courts c
-            ON c.id = r.court_id
+          (
+            SELECT p.payment_proof
+            FROM payments p
+            WHERE p.reservation_id = r.id
+            ORDER BY p.id DESC
+            LIMIT 1
+          ) AS proof_url
 
-          LEFT JOIN users u
-            ON u.id = r.user_id
+        FROM reservations r
 
-          WHERE r.id = ?
+        INNER JOIN courts c
+          ON c.id = r.court_id
 
-          LIMIT 1
-          `,
-          [id]
-        );
+        LEFT JOIN users u
+          ON u.id = r.user_id
 
-      return rows[0];
-    }
+        WHERE r.id = ?
+
+        LIMIT 1
+        `,
+        [id]
+      );
+
+    return rows[0];
+  }
 
     /**
      * =====================================================
@@ -410,7 +426,7 @@
      * All Reservations
      * =====================================================
      */
-    async findAll() {
+      async findAll() {
       const [rows]: any =
         await pool.query(
           `
@@ -428,7 +444,23 @@
                 )
               ELSE
                 r.guest_name
-            END AS player_name
+            END AS player_name,
+
+            (
+              SELECT p.payment_method
+              FROM payments p
+              WHERE p.reservation_id = r.id
+              ORDER BY p.id DESC
+              LIMIT 1
+            ) AS payment_method,
+
+            (
+              SELECT p.payment_proof
+              FROM payments p
+              WHERE p.reservation_id = r.id
+              ORDER BY p.id DESC
+              LIMIT 1
+            ) AS proof_url
 
           FROM reservations r
 
@@ -439,8 +471,8 @@
             ON u.id = r.user_id
 
           ORDER BY
-            reservation_date DESC,
-            start_time DESC
+            r.reservation_date DESC,
+            r.start_time DESC
           `
         );
 

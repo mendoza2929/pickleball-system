@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import pool from "../../config/database";
 
 export class PaymentRepository {
+
   /**
    * Create local payment record
    */
@@ -12,8 +13,7 @@ export class PaymentRepository {
     payment_proof?: string | null;
     status: string;
   }) {
-    const uuid =
-      randomUUID();
+    const uuid = randomUUID();
 
     const [result]: any =
       await pool.query(
@@ -33,8 +33,7 @@ export class PaymentRepository {
           data.reservation_id,
           data.amount,
           data.payment_method,
-          data.payment_proof ??
-            null,
+          data.payment_proof ?? null,
           data.status,
         ]
       );
@@ -73,13 +72,11 @@ export class PaymentRepository {
         [paymentId]
       );
 
-    return (
-      rows[0] ?? undefined
-    );
+    return rows[0] ?? undefined;
   }
 
   /**
-   * Find payment by UUID
+   * Find payment by public UUID
    */
   async getByUuid(
     uuid: string
@@ -107,14 +104,11 @@ export class PaymentRepository {
         [uuid]
       );
 
-    return (
-      rows[0] ?? undefined
-    );
+    return rows[0] ?? undefined;
   }
 
   /**
-   * Find latest payment
-   * belonging to reservation
+   * Find latest payment belonging to reservation
    */
   async findByReservationId(
     reservationId: number
@@ -143,9 +137,7 @@ export class PaymentRepository {
         [reservationId]
       );
 
-    return (
-      rows[0] ?? undefined
-    );
+    return rows[0] ?? undefined;
   }
 
   /**

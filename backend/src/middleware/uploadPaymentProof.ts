@@ -8,29 +8,29 @@ const uploadDirectory = path.join(
   "payment-proofs"
 );
 
-// Make sure directory exists
+// =====================================================
+// ENSURE UPLOAD DIRECTORY EXISTS
+// =====================================================
+
 if (!fs.existsSync(uploadDirectory)) {
   fs.mkdirSync(uploadDirectory, {
     recursive: true,
   });
 }
 
+// =====================================================
+// STORAGE
+// =====================================================
+
 const storage = multer.diskStorage({
-  destination: (
-    _req,
-    _file,
-    cb
-  ) => {
+  destination: (_req, _file, cb) => {
     cb(null, uploadDirectory);
   },
 
-  filename: (
-    _req,
-    file,
-    cb
-  ) => {
-    const extension =
-      path.extname(file.originalname);
+  filename: (_req, file, cb) => {
+    const extension = path.extname(
+      file.originalname
+    );
 
     const filename =
       `payment-${Date.now()}-${Math.round(
@@ -40,6 +40,10 @@ const storage = multer.diskStorage({
     cb(null, filename);
   },
 });
+
+// =====================================================
+// FILE FILTER
+// =====================================================
 
 const fileFilter: multer.Options["fileFilter"] = (
   _req,
@@ -65,11 +69,14 @@ const fileFilter: multer.Options["fileFilter"] = (
   cb(null, true);
 };
 
-export const uploadPaymentProof =
-  multer({
-    storage,
-    fileFilter,
-    limits: {
-      fileSize: 5 * 1024 * 1024,
-    },
-  });
+// =====================================================
+// UPLOAD MIDDLEWARE
+// =====================================================
+
+export const uploadPaymentProof = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+});

@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
   Clock3,
   DollarSign,
+  Eye,
   Filter,
   Mail,
   MapPin,
@@ -68,7 +68,8 @@ interface Reservation {
 
   reservation_status: ReservationStatus;
   payment_status: PaymentStatus;
-
+  payment_method?: string | null;
+  proof_url?: string | null;
   remarks?: string | null;
 
   created_at?: string;
@@ -137,6 +138,31 @@ function formatCurrency(amount: number) {
   }).format(Number(amount) || 0);
 }
 
+function getProofUrl(
+  proofUrl?: string | null
+): string | null {
+  if (!proofUrl) {
+    return null;
+  }
+
+  // Already a complete URL
+  if (
+    proofUrl.startsWith("http://") ||
+    proofUrl.startsWith("https://")
+  ) {
+    return proofUrl;
+  }
+
+  const backendUrl =
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    "http://localhost:5000";
+
+  return `${backendUrl.replace(/\/$/, "")}${
+    proofUrl.startsWith("/")
+      ? proofUrl
+      : `/${proofUrl}`
+  }`;
+}
 // ============================================================
 // STATUS BADGE
 // ============================================================
@@ -278,7 +304,9 @@ export default function ReservationsPage() {
 
   const [savingReservation, setSavingReservation] =
     useState(false);
-
+  const proofUrl = getProofUrl(
+    selectedReservation?.proof_url
+  );
   // ==========================================================
   // LOAD RESERVATIONS
   // ==========================================================
@@ -1876,6 +1904,65 @@ const handleCloseWalkIn = () => {
 
               </section>
 
+{/* =====================================================
+    PROOF OF PAYMENT
+===================================================== */}
+
+{(() => {
+  const proofUrl = getProofUrl(
+    selectedReservation?.proof_url
+  );
+
+  if (!proofUrl) {
+    return null;
+  }
+
+  return (
+    <section className="mt-6">
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        Proof of Payment
+      </p>
+
+      <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+        {/* Image Preview */}
+        <div className="flex min-h-[280px] items-center justify-center bg-slate-100 p-4">
+          <img
+            key={proofUrl}
+            src={proofUrl}
+            alt="Payment proof"
+            className="block max-h-[420px] max-w-full rounded-xl object-contain"
+            onError={(event) => {
+              console.error(
+                "Failed to load payment proof:",
+                proofUrl
+              );
+            }}
+          />
+        </div>
+
+        {/* Information */}
+        <div className="border-t border-slate-200 bg-white px-4 py-4">
+          <p className="text-sm font-semibold text-slate-800">
+            Payment proof submitted
+          </p>
+
+          <p className="mt-1 text-xs text-slate-400">
+            Review the payment proof before confirming.
+          </p>
+
+          <a
+            href={proofUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+          >
+            Open full image
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+})()}
               {/* Remarks */}
 
               {selectedReservation.remarks && (
