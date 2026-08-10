@@ -61,7 +61,10 @@
           FROM reservations
           WHERE court_id = ?
             AND reservation_date = ?
-            AND reservation_status != 'Cancelled'
+            AND reservation_status IN (
+              'Pending',
+              'Confirmed'
+            )
             AND start_time < ?
             AND end_time > ?
           LIMIT 1
