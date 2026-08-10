@@ -1,155 +1,155 @@
-import { Request, Response } from "express";
+// import { Request, Response } from "express";
 
-import { AuthRequest } from "../../middleware/authenticate";
-import { asyncHandler } from "../../shared/utils/asyncHandler";
-import { ApiResponse } from "../../utils/apiResponse";
+// import { AuthRequest } from "../../middleware/authenticate";
+// import { asyncHandler } from "../../shared/utils/asyncHandler";
+// import { ApiResponse } from "../../utils/apiResponse";
 
-import { PaymentService } from "./payment.servicev2";
-import { createPaymentSchema } from "./payment.validator";
+// import { PaymentService } from "./payment.servicev2";
+// import { createPaymentSchema } from "./payment.validator";
 
-export class PaymentController {
-  private paymentService: PaymentService;
+// export class PaymentController {
+//   private paymentService: PaymentService;
 
-  constructor() {
-    this.paymentService = new PaymentService();
-  }
+//   constructor() {
+//     this.paymentService = new PaymentService();
+//   }
 
-  /**
-   * POST /api/payments
-   *
-   * Create GCash payment
-   *
-   * Guest reservations are allowed,
-   * so authentication is optional.
-   */
-  create = asyncHandler(
-    async (
-      req: AuthRequest,
-      res: Response
-    ) => {
-      // -----------------------------------------
-      // Validate request body
-      // -----------------------------------------
+//   /**
+//    * POST /api/payments
+//    *
+//    * Create GCash payment
+//    *
+//    * Guest reservations are allowed,
+//    * so authentication is optional.
+//    */
+//   create = asyncHandler(
+//     async (
+//       req: AuthRequest,
+//       res: Response
+//     ) => {
+//       // -----------------------------------------
+//       // Validate request body
+//       // -----------------------------------------
 
-      const data = createPaymentSchema.parse(
-        req.body
-      );
+//       const data = createPaymentSchema.parse(
+//         req.body
+//       );
 
-      // -----------------------------------------
-      // Create PayMongo payment
-      // -----------------------------------------
+//       // -----------------------------------------
+//       // Create PayMongo payment
+//       // -----------------------------------------
 
-      const result =
-      await this.paymentService.create(
-        req.user?.id ?? null,
-        data
-      );
+//       const result =
+//       await this.paymentService.create(
+//         req.user?.id ?? null,
+//         data
+//       );
 
-      // -----------------------------------------
-      // Return payment information
-      // -----------------------------------------
+//       // -----------------------------------------
+//       // Return payment information
+//       // -----------------------------------------
 
-      return ApiResponse.success(
-        res,
-        result,
-        "Payment created successfully.",
-        201
-      );
-    }
-  );
+//       return ApiResponse.success(
+//         res,
+//         result,
+//         "Payment created successfully.",
+//         201
+//       );
+//     }
+//   );
 
-  /**
-   * GET /api/payments/uuid/:uuid
-   *
-   * Public payment lookup
-   */
-  getByUuid = asyncHandler(
-    async (
-      req: Request,
-      res: Response
-    ) => {
-      const uuid =
-        req.params.uuid as string;
+//   /**
+//    * GET /api/payments/uuid/:uuid
+//    *
+//    * Public payment lookup
+//    */
+//   getByUuid = asyncHandler(
+//     async (
+//       req: Request,
+//       res: Response
+//     ) => {
+//       const uuid =
+//         req.params.uuid as string;
 
-      const payment =
-        await this.paymentService.getByUuid(
-          uuid
-        );
+//       const payment =
+//         await this.paymentService.getByUuid(
+//           uuid
+//         );
 
-      return ApiResponse.success(
-        res,
-        payment,
-        "Payment retrieved successfully."
-      );
-    }
-  );
+//       return ApiResponse.success(
+//         res,
+//         payment,
+//         "Payment retrieved successfully."
+//       );
+//     }
+//   );
 
-  /**
-   * GET /api/payments/reservation/:reservationId
-   *
-   * Get payment for a reservation
-   */
-  getByReservation =
-    asyncHandler(
-      async (
-        req: AuthRequest,
-        res: Response
-      ) => {
-        // -----------------------------------------
-        // Authentication check
-        // -----------------------------------------
+//   /**
+//    * GET /api/payments/reservation/:reservationId
+//    *
+//    * Get payment for a reservation
+//    */
+//   getByReservation =
+//     asyncHandler(
+//       async (
+//         req: AuthRequest,
+//         res: Response
+//       ) => {
+//         // -----------------------------------------
+//         // Authentication check
+//         // -----------------------------------------
 
-        if (!req.user?.id) {
-          return res.status(401).json({
-            success: false,
-            message:
-              "Authentication required.",
-          });
-        }
+//         if (!req.user?.id) {
+//           return res.status(401).json({
+//             success: false,
+//             message:
+//               "Authentication required.",
+//           });
+//         }
 
-        // -----------------------------------------
-        // Get reservation ID from URL
-        // -----------------------------------------
+//         // -----------------------------------------
+//         // Get reservation ID from URL
+//         // -----------------------------------------
 
-        const reservationId = Number(
-          req.params.reservationId
-        );
+//         const reservationId = Number(
+//           req.params.reservationId
+//         );
 
-        // -----------------------------------------
-        // Validate reservation ID
-        // -----------------------------------------
+//         // -----------------------------------------
+//         // Validate reservation ID
+//         // -----------------------------------------
 
-        if (
-          !Number.isInteger(
-            reservationId
-          ) ||
-          reservationId <= 0
-        ) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Invalid reservation ID.",
-          });
-        }
+//         if (
+//           !Number.isInteger(
+//             reservationId
+//           ) ||
+//           reservationId <= 0
+//         ) {
+//           return res.status(400).json({
+//             success: false,
+//             message:
+//               "Invalid reservation ID.",
+//           });
+//         }
 
-        // -----------------------------------------
-        // Get payment
-        // -----------------------------------------
+//         // -----------------------------------------
+//         // Get payment
+//         // -----------------------------------------
 
-        const payment =
-          await this.paymentService.getByReservation(
-            reservationId
-          );
+//         const payment =
+//           await this.paymentService.getByReservation(
+//             reservationId
+//           );
 
-        // -----------------------------------------
-        // Return payment
-        // -----------------------------------------
+//         // -----------------------------------------
+//         // Return payment
+//         // -----------------------------------------
 
-        return ApiResponse.success(
-          res,
-          payment,
-          "Payment retrieved successfully."
-        );
-      }
-    );
-}
+//         return ApiResponse.success(
+//           res,
+//           payment,
+//           "Payment retrieved successfully."
+//         );
+//       }
+//     );
+// }
