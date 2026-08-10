@@ -14,15 +14,61 @@ dotenv.config();
 const app = express();
 
 // =====================================================
-// MIDDLEWARE
+// CORS
 // =====================================================
 
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://pickleball-system-indol.vercel.app",
+];
+
+app.use(
+  cors({
+    origin: (
+      origin,
+      callback
+    ) => {
+      // Allow requests without Origin
+      // such as Postman/server-to-server
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error(
+          `CORS blocked origin: ${origin}`
+        )
+      );
+    },
+
+    credentials: true,
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
+  })
+);
+
+// =====================================================
+// HELMET
+// =====================================================
 
 app.use(
   helmet({
-    // Allow frontend (localhost:3000)
-    // to display resources from backend (localhost:5000)
     crossOriginResourcePolicy: {
       policy: "cross-origin",
     },
@@ -35,10 +81,13 @@ app.use(
           "'self'",
           "data:",
           "blob:",
+          "https://pickleball-system-production.up.railway.app",
           "http://localhost:5000",
         ],
 
-        scriptSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+        ],
 
         styleSrc: [
           "'self'",
@@ -49,11 +98,17 @@ app.use(
           "'self'",
           "http://localhost:3000",
           "http://localhost:5000",
+          "https://pickleball-system-indol.vercel.app",
+          "https://pickleball-system-production.up.railway.app",
         ],
       },
     },
   })
 );
+
+// =====================================================
+// GENERAL MIDDLEWARE
+// =====================================================
 
 app.use(morgan("dev"));
 
@@ -74,7 +129,10 @@ app.use(cookieParser());
 app.use(
   "/uploads",
   express.static(
-    path.join(process.cwd(), "uploads")
+    path.join(
+      process.cwd(),
+      "uploads"
+    )
   )
 );
 
@@ -85,7 +143,8 @@ app.use(
 app.get("/", (_, res) => {
   res.json({
     success: true,
-    message: "Pickleball API is running.",
+    message:
+      "Pickleball API is running.",
   });
 });
 
