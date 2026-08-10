@@ -1,20 +1,34 @@
 import { Router } from "express";
 
-import { ReservationController } from "./reservation.controller";
+import {
+  ReservationController,
+} from "./reservation.controller";
 
-import { authenticate } from "../../middleware/authenticate";
-import { optionalAuthenticate } from "../../middleware/optionalAuthenticate";
-import { authorizeAdmin } from "../../middleware/authorizeAdmin";
+import {
+  authenticate,
+} from "../../middleware/authenticate";
 
-import availabilityRoutes from "./availability/routes";
+import {
+  optionalAuthenticate,
+} from "../../middleware/optionalAuthenticate";
+
+import {
+  authorizeAdmin,
+} from "../../middleware/authorizeAdmin";
+
+import availabilityRoutes
+  from "./availability/routes";
+
 
 const router = Router();
 
 const reservationController =
   new ReservationController();
 
+
 // =====================================================
-// CREATE RESERVATION
+// CREATE ONLINE RESERVATION
+// PUBLIC
 // =====================================================
 
 router.post(
@@ -22,6 +36,7 @@ router.post(
   optionalAuthenticate,
   reservationController.create
 );
+
 
 // =====================================================
 // MY RESERVATIONS
@@ -33,8 +48,9 @@ router.get(
   reservationController.getMyReservations
 );
 
+
 // =====================================================
-// PUBLIC RESERVATION LOOKUP
+// PUBLIC UUID LOOKUP
 // =====================================================
 
 router.get(
@@ -42,8 +58,20 @@ router.get(
   reservationController.getByUuid
 );
 
+
+// =====================================================
+// AVAILABILITY
+// =====================================================
+
+router.use(
+  "/availability",
+  availabilityRoutes
+);
+
+
 // =====================================================
 // ALL RESERVATIONS
+// ADMIN
 // =====================================================
 
 router.get(
@@ -53,16 +81,19 @@ router.get(
   reservationController.getAll
 );
 
+
 // =====================================================
-// AVAILABILITY
-// IMPORTANT:
-// This MUST come BEFORE /:id
+// WALK-IN RESERVATION
+// ADMIN
 // =====================================================
 
-router.use(
-  "/availability",
-  availabilityRoutes
+router.post(
+  "/walk-in",
+  authenticate,
+  authorizeAdmin,
+  reservationController.createWalkIn
 );
+
 
 // =====================================================
 // RESERVATION DETAILS
@@ -74,8 +105,9 @@ router.get(
   reservationController.getById
 );
 
+
 // =====================================================
-// CANCEL RESERVATION
+// CANCEL
 // =====================================================
 
 router.patch(
@@ -84,8 +116,10 @@ router.patch(
   reservationController.cancel
 );
 
+
 // =====================================================
-// UPDATE RESERVATION STATUS
+// UPDATE STATUS
+// ADMIN
 // =====================================================
 
 router.patch(
@@ -95,15 +129,5 @@ router.patch(
   reservationController.updateStatus
 );
 
-// =====================================================
-// WALK-IN RESERVATION
-// =====================================================
-
-router.post(
-  "/walk-in",
-  authenticate,
-  authorizeAdmin,
-  reservationController.createWalkIn
-);
 
 export default router;

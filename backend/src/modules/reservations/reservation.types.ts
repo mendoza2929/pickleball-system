@@ -3,20 +3,18 @@ export interface Reservation {
   uuid: string;
   reservation_no: string;
 
-  user_id: number;
+  user_id: number | null;
+  customer_id: number | null;
 
   court_id: number;
 
   reservation_date: string;
 
   start_time: string;
-
   end_time: string;
 
   total_hours: number;
-
   hourly_rate: number;
-
   total_amount: number;
 
   reservation_status:
@@ -33,6 +31,5 @@ export interface Reservation {
   remarks: string | null;
 
   created_at: Date;
-
   updated_at: Date;
 }

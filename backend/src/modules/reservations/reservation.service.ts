@@ -1,7 +1,7 @@
 import { ReservationRepository } from "./reservation.repository";
 import { CourtRepository } from "../courts/court.repository";
 
-import {
+import type {
   CreateReservationInput,
   CreateWalkInReservationInput,
 } from "./reservation.validator";
@@ -12,24 +12,17 @@ import { BadRequestError } from "../../shared/errors/BadRequestError";
 import { ConflictError } from "../../shared/errors/ConflictError";
 import { NotFoundError } from "../../shared/errors/NotFoundError";
 
+import { CustomerRepository } from "../customer/customer.repository";
 
-import {
-  PAYMENT_STATUS,
-} from "../../constants/payment-status";
-
-import {
-  RESERVATION_STATUS,
-} from "../../constants/reservation-status";
-
-import {
-  COURT_STATUS,
-} from "../../constants/court-status";
+import { PAYMENT_STATUS } from "../../constants/payment-status";
+import { RESERVATION_STATUS } from "../../constants/reservation-status";
+import { COURT_STATUS } from "../../constants/court-status";
 
 import { CourtScheduleRepository } from "../court-schedules/courtSchedule.repository";
 
 import { getDayOfWeek } from "../../shared/utils/date";
 import { timeToMinutes } from "../../shared/utils/time";
-import { CourtScheduleOverrideRepository } from "../courtScheduleOverrides/courtScheduleOverride.repository";
+
 
 export class ReservationService {
 
@@ -39,29 +32,30 @@ export class ReservationService {
   private courtRepository =
     new CourtRepository();
 
+  private customerRepository =
+    new CustomerRepository();
+
   private courtScheduleRepository =
     new CourtScheduleRepository();
 
-  private courtScheduleOverrideRepository =
-  new CourtScheduleOverrideRepository();
 
+  // =====================================================
+  // CREATE ONLINE RESERVATION
+  // =====================================================
 
-  /**
-   * Create Reservation
-   */
-    async create(
-      userId: number | null,
-      data: CreateReservationInput,
-      options?: {
-        reservationStatus?: string;
-        paymentStatus?: string;
-        isWalkIn?: boolean;
-      }
-    ) {
+  async create(
+    userId: number | null,
+    data: CreateReservationInput,
+    options?: {
+      reservationStatus?: string;
+      paymentStatus?: string;
+      isWalkIn?: boolean;
+    }
+  ) {
 
-    // ---------------------------------------------------
-    // Court Exists
-    // ---------------------------------------------------
+    // =====================================================
+    // FIND COURT
+    // =====================================================
 
     const court =
       await this.courtRepository.findById(
@@ -75,26 +69,23 @@ export class ReservationService {
     }
 
 
-    // ---------------------------------------------------
-    // Guest Validation
-    // ---------------------------------------------------
+    // =====================================================
+    // CUSTOMER VALIDATION
+    // =====================================================
 
-    if (!userId && !options?.isWalkIn) {
-      if (
-        !data.guest_name ||
-        !data.guest_email ||
-        !data.guest_phone
-      ) {
-        throw new BadRequestError(
-          "Guest name, email and phone are required."
-        );
-      }
+    if (
+      !data.guest_name ||
+      !data.guest_phone
+    ) {
+      throw new BadRequestError(
+        "Customer name and phone are required."
+      );
     }
 
 
-    // ---------------------------------------------------
-    // Court Status
-    // ---------------------------------------------------
+    // =====================================================
+    // COURT STATUS
+    // =====================================================
 
     if (
       court.status !==
@@ -106,104 +97,38 @@ export class ReservationService {
     }
 
 
-   // ---------------------------------------------------
-    // Court Schedule
-    // ---------------------------------------------------
+    // =====================================================
+    // COURT SCHEDULE
+    // =====================================================
 
     const day =
       getDayOfWeek(
         data.reservation_date
       );
 
-    // ---------------------------------------------------
-    // Specific Date Override
-    // ---------------------------------------------------
-
-    const override =
-      await this.courtScheduleOverrideRepository
-        .findByCourtAndDate(
+    const schedule =
+      await this.courtScheduleRepository
+        .findByCourtAndDay(
           court.id,
-          data.reservation_date
+          day
         );
 
-    // ---------------------------------------------------
-    // Determine Effective Schedule
-    // ---------------------------------------------------
-
-    let schedule;
-
-    if (override) {
-      // Specific date override wins
-      schedule = {
-        open_time:
-          override.open_time,
-
-        close_time:
-          override.close_time,
-
-        is_closed:
-          Boolean(
-            override.is_closed
-          ),
-      };
-    } else {
-      // No override → use normal weekly schedule
-      schedule =
-        await this.courtScheduleRepository
-          .findByCourtAndDay(
-            court.id,
-            day
-          );
-
-      if (!schedule) {
-        throw new BadRequestError(
-          "Court has no operating schedule."
-        );
-      }
-
-      schedule = {
-        open_time:
-          schedule.open_time,
-
-        close_time:
-          schedule.close_time,
-
-        is_closed:
-          Boolean(
-            schedule.is_closed
-          ),
-      };
+    if (!schedule) {
+      throw new BadRequestError(
+        "Court has no operating schedule."
+      );
     }
-
-    // ---------------------------------------------------
-    // Court Closed
-    // ---------------------------------------------------
 
     if (schedule.is_closed) {
       throw new BadRequestError(
-        override
-          ? `Court is closed on ${data.reservation_date}.`
-          : "Court is closed on this day."
-      );
-    }
-
-    // ---------------------------------------------------
-    // Validate Operating Hours
-    // ---------------------------------------------------
-
-    if (
-      !schedule.open_time ||
-      !schedule.close_time
-    ) {
-      throw new BadRequestError(
-        "Court schedule has invalid operating hours."
+        "Court is closed on this day."
       );
     }
 
 
-    // ---------------------------------------------------
-    // Calculate Hours
-    // ---------------------------------------------------
+    // =====================================================
+    // CALCULATE HOURS
+    // =====================================================
 
     const totalHours =
       calculateHours(
@@ -224,9 +149,9 @@ export class ReservationService {
     }
 
 
-    // ---------------------------------------------------
-    // Operating Hours
-    // ---------------------------------------------------
+    // =====================================================
+    // OPERATING HOURS
+    // =====================================================
 
     const startMinutes =
       timeToMinutes(
@@ -249,29 +174,22 @@ export class ReservationService {
       );
 
 
-    if (
-      startMinutes <
-      openMinutes
-    ) {
+    if (startMinutes < openMinutes) {
       throw new BadRequestError(
         `Court opens at ${schedule.open_time}`
       );
     }
 
-
-    if (
-      endMinutes >
-      closeMinutes
-    ) {
+    if (endMinutes > closeMinutes) {
       throw new BadRequestError(
         `Court closes at ${schedule.close_time}`
       );
     }
 
 
-    // ---------------------------------------------------
-    // Payment Calculation
-    // ---------------------------------------------------
+    // =====================================================
+    // PAYMENT
+    // =====================================================
 
     const hourlyRate =
       Number(court.hourly_rate);
@@ -280,39 +198,120 @@ export class ReservationService {
       hourlyRate * totalHours;
 
 
-    // ---------------------------------------------------
-    // Create Reservation
-    // ---------------------------------------------------
-    //
-    // IMPORTANT:
-    //
-    // Conflict checking now happens INSIDE
-    // the repository transaction.
-    //
-    // We intentionally do NOT call
-    // checkTimeConflict() here anymore.
-    //
-    // ---------------------------------------------------
+    // =====================================================
+    // FIND OR CREATE CUSTOMER
+    // =====================================================
 
-    let reservation;
+    let customerId: number | null = null;
+
+    const email =
+      data.guest_email?.trim() || null;
+
+    const phone =
+      data.guest_phone?.trim() || null;
+
+
+    // -----------------------------------------------------
+    // FIND BY EMAIL
+    // -----------------------------------------------------
+
+    if (email) {
+
+      const existingCustomer =
+        await this.customerRepository.findByEmail(
+          email
+        );
+
+      if (existingCustomer) {
+        customerId =
+          existingCustomer.id;
+      }
+    }
+
+
+    // -----------------------------------------------------
+    // FIND BY PHONE
+    // -----------------------------------------------------
+
+    if (!customerId && phone) {
+
+      const existingCustomer =
+        await this.customerRepository.findByPhone(
+          phone
+        );
+
+      if (existingCustomer) {
+        customerId =
+          existingCustomer.id;
+      }
+    }
+
+
+    // -----------------------------------------------------
+    // CREATE CUSTOMER
+    // -----------------------------------------------------
+
+    if (!customerId) {
+
+      const name =
+        data.guest_name.trim();
+
+      const parts =
+        name.split(/\s+/);
+
+      const firstName =
+        parts.shift() || name;
+
+      const lastName =
+        parts.join(" ") || "";
+
+
+      const customer =
+        await this.customerRepository.create({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          phone,
+          status: "Active",
+        });
+
+
+      if (!customer) {
+        throw new BadRequestError(
+          "Failed to create customer."
+        );
+      }
+
+
+      customerId =
+        customer.id;
+    }
+
+
+    // =====================================================
+    // CREATE RESERVATION
+    // =====================================================
 
     try {
 
-      reservation =
+      const reservation =
         await this.reservationRepository
           .createReservation({
 
             user_id:
               userId,
 
+            customer_id:
+              customerId,
+
             guest_name:
               data.guest_name,
 
             guest_email:
-              data.guest_email,
+              email ?? undefined,
 
             guest_phone:
-              data.guest_phone,
+              phone ?? undefined,
 
             court_id:
               data.court_id,
@@ -338,116 +337,94 @@ export class ReservationService {
             remarks:
               data.remarks,
 
-           reservation_status:
-            options?.reservationStatus ??
-            RESERVATION_STATUS.PENDING,
+            reservation_status:
+              options?.reservationStatus ??
+              RESERVATION_STATUS.PENDING,
 
-          payment_status:
-            options?.paymentStatus ??
-            PAYMENT_STATUS.UNPAID,
+            payment_status:
+              options?.paymentStatus ??
+              PAYMENT_STATUS.UNPAID,
           });
 
-    } catch (error: any) {
 
-      // -------------------------------------------------
-      // Reservation Conflict
-      // -------------------------------------------------
+      return reservation;
+
+    } catch (error: any) {
 
       if (
         error.message ===
         "RESERVATION_CONFLICT"
       ) {
-
         throw new ConflictError(
           "Court already reserved during this time."
         );
       }
 
-      // -------------------------------------------------
-      // Other Errors
-      // -------------------------------------------------
-
       throw error;
     }
-
-
-    // ---------------------------------------------------
-    // Response
-    // ---------------------------------------------------
-
-    return {
-
-      id:
-        reservation.id,
-
-      // Payment API expects this field
-      reservation_id:
-        reservation.id,
-
-      uuid:
-        reservation.uuid,
-
-      reservation_no:
-        reservation.reservation_no,
-
-    };
   }
 
 
-  /**
-   * All Reservations
-   */
+  // =====================================================
+  // GET ALL
+  // =====================================================
+
   async getAll() {
 
     return await this.reservationRepository
       .findAll();
-
   }
 
 
-async getById(
-  id: number,
-  userId: number,
-  roleName: string
-) {
-  const reservation =
-    await this.reservationRepository.findById(id);
-
-  if (!reservation) {
-    throw new NotFoundError(
-      "Reservation not found."
-    );
-  }
-
   // =====================================================
-  // OWNER / ADMIN CAN VIEW ANY RESERVATION
+  // GET BY ID
   // =====================================================
 
-  const isAdmin =
-    roleName === "Owner" ||
-    roleName === "Admin";
+  async getById(
+    id: number,
+    userId: number,
+    roleName: string
+  ) {
 
-  if (isAdmin) {
+    const reservation =
+      await this.reservationRepository
+        .findById(id);
+
+    if (!reservation) {
+      throw new NotFoundError(
+        "Reservation not found."
+      );
+    }
+
+
+    const isAdmin =
+      roleName === "Owner" ||
+      roleName === "Admin";
+
+
+    if (isAdmin) {
+      return reservation;
+    }
+
+
+    if (
+      reservation.user_id !==
+      userId
+    ) {
+      throw new NotFoundError(
+        "Reservation not found."
+      );
+    }
+
+
     return reservation;
   }
 
+
   // =====================================================
-  // NORMAL USER CAN ONLY VIEW THEIR OWN RESERVATION
+  // MY RESERVATIONS
   // =====================================================
 
-  if (reservation.user_id !== userId) {
-    throw new NotFoundError(
-      "Reservation not found."
-    );
-  }
-
-  return reservation;
-}
-
-
-  /**
-   * My Reservations
-   */
   async getMyReservations(
     userId: number
   ) {
@@ -456,13 +433,13 @@ async getById(
       .findUserReservations(
         userId
       );
-
   }
 
 
-  /**
-   * Cancel Reservation
-   */
+  // =====================================================
+  // CANCEL
+  // =====================================================
+
   async cancel(
     id: number,
     userId: number
@@ -500,15 +477,14 @@ async getById(
 
 
     return await this.reservationRepository
-      .cancelReservation(
-        id
-      );
+      .cancelReservation(id);
   }
 
 
-  /**
-   * Public Reservation Lookup
-   */
+  // =====================================================
+  // PUBLIC UUID LOOKUP
+  // =====================================================
+
   async getByUuid(
     uuid: string
   ) {
@@ -525,7 +501,6 @@ async getById(
 
 
     return {
-
       uuid:
         reservation.uuid,
 
@@ -549,13 +524,14 @@ async getById(
 
       court_name:
         reservation.court_name,
-
     };
   }
 
-    /**
-   * Update Reservation Status
-   */
+
+  // =====================================================
+  // UPDATE STATUS
+  // =====================================================
+
   async updateStatus(
     id: number,
     data: {
@@ -563,12 +539,10 @@ async getById(
       payment_status: string;
     }
   ) {
-    // ---------------------------------------------------
-    // Find Reservation
-    // ---------------------------------------------------
 
     const reservation =
-      await this.reservationRepository.findById(id);
+      await this.reservationRepository
+        .findById(id);
 
     if (!reservation) {
       throw new NotFoundError(
@@ -576,9 +550,6 @@ async getById(
       );
     }
 
-    // ---------------------------------------------------
-    // Validate Reservation Status
-    // ---------------------------------------------------
 
     const validReservationStatuses = [
       RESERVATION_STATUS.PENDING,
@@ -586,6 +557,7 @@ async getById(
       RESERVATION_STATUS.CANCELLED,
       RESERVATION_STATUS.COMPLETED,
     ];
+
 
     if (
       !validReservationStatuses.includes(
@@ -597,15 +569,13 @@ async getById(
       );
     }
 
-    // ---------------------------------------------------
-    // Validate Payment Status
-    // ---------------------------------------------------
 
     const validPaymentStatuses = [
       PAYMENT_STATUS.UNPAID,
       PAYMENT_STATUS.PARTIAL,
       PAYMENT_STATUS.PAID,
     ];
+
 
     if (
       !validPaymentStatuses.includes(
@@ -617,32 +587,86 @@ async getById(
       );
     }
 
-    // ---------------------------------------------------
-    // Update
-    // ---------------------------------------------------
 
-    return await this.reservationRepository.updateStatus(
-      id,
-      data.reservation_status,
-      data.payment_status
+    return await this.reservationRepository
+      .updateStatus(
+        id,
+        data.reservation_status,
+        data.payment_status
+      );
+  }
+
+// =====================================================
+// CREATE WALK-IN
+// =====================================================
+
+async createWalkIn(
+  data: CreateWalkInReservationInput
+) {
+
+  // ===================================================
+  // FIND CUSTOMER
+  // ===================================================
+
+  const customer =
+    await this.customerRepository.findById(
+      data.customer_id
+    );
+
+  if (!customer) {
+    throw new NotFoundError(
+      "Customer not found."
     );
   }
 
-  async createWalkIn(
-    data: CreateWalkInReservationInput
-  ) {
-    return await this.create(
-      null,
-      data,
-      {
-        isWalkIn: true,
+  // ===================================================
+  // BUILD RESERVATION DATA
+  //
+  // Make sure optional values become strings
+  // because CreateReservationInput currently
+  // expects guest_email / guest_phone as strings.
+  // ===================================================
 
-        reservationStatus:
-          RESERVATION_STATUS.CONFIRMED,
+  const reservationData = {
+    ...data,
 
-        paymentStatus:
-          PAYMENT_STATUS.PAID,
-      }
-    );
-  }
+    customer_id:
+      customer.id,
+
+    guest_name:
+      data.guest_name ??
+      `${customer.first_name} ${customer.last_name}`,
+
+    guest_email:
+      data.guest_email ??
+      customer.email ??
+      "",
+
+    guest_phone:
+      data.guest_phone ??
+      customer.phone ??
+      "",
+
+    remarks:
+      data.remarks ?? "",
+  };
+
+  // ===================================================
+  // CREATE RESERVATION
+  // ===================================================
+
+  return this.create(
+    null,
+    reservationData,
+    {
+      isWalkIn: true,
+
+      reservationStatus:
+        RESERVATION_STATUS.CONFIRMED,
+
+      paymentStatus:
+        PAYMENT_STATUS.PAID,
+    }
+  );
+}
 }

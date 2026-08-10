@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// =====================================================
+// CREATE ONLINE RESERVATION
+// =====================================================
+
 export const createReservationSchema = z.object({
   court_id: z.coerce
     .number()
@@ -18,81 +22,117 @@ export const createReservationSchema = z.object({
     "Invalid time format. Use HH:mm"
   ),
 
-  // Guest Information
+  // =====================================================
+  // CUSTOMER INFORMATION
+  // =====================================================
+
   guest_name: z
     .string()
     .trim()
-    .min(2)
-    .max(150)
-    .optional(),
+    .min(2, "Customer name is required.")
+    .max(150),
 
   guest_email: z
     .string()
-    .email()
-    .max(150)
-    .optional(),
+    .trim()
+    .email("Invalid email address.")
+    .max(150),
 
   guest_phone: z
     .string()
-    .min(7)
-    .max(30)
-    .optional(),
+    .trim()
+    .min(7, "Customer phone is required.")
+    .max(30),
 
   remarks: z
     .string()
+    .trim()
     .max(500)
     .optional(),
 });
 
-export const createWalkInReservationSchema =
-  z.object({
-    court_id: z.coerce
-      .number()
-      .int()
-      .positive(),
+// =====================================================
+// WALK-IN RESERVATION
+// =====================================================
 
-    reservation_date: z.string().date(),
+export const createWalkInReservationSchema = z.object({
+  customer_id: z
+    .number()
+    .int()
+    .positive(),
 
-    start_time: z.string().regex(
-      /^([01]\d|2[0-3]):([0-5]\d)$/,
-      "Invalid time format. Use HH:mm"
-    ),
+  court_id: z
+    .number()
+    .int()
+    .positive(),
 
-    end_time: z.string().regex(
-      /^([01]\d|2[0-3]):([0-5]\d)$/,
-      "Invalid time format. Use HH:mm"
-    ),
+  reservation_date: z
+    .string()
+    .min(1, "Reservation date is required."),
 
-    // Walk-in Customer
-    guest_name: z
-      .string()
-      .trim()
-      .min(2, "Customer name is required.")
-      .max(150),
+  start_time: z
+    .string()
+    .min(1, "Start time is required."),
 
-    guest_phone: z
-      .string()
-      .trim()
-      .min(7)
-      .max(30),
+  end_time: z
+    .string()
+    .min(1, "End time is required."),
 
-    remarks: z
-      .string()
-      .trim()
-      .max(500)
-      .optional(),
-  });
+  guest_name: z
+    .string()
+    .trim()
+    .optional(),
 
-export const updateReservationSchema =
-  createReservationSchema.partial();
+  guest_email: z
+    .string()
+    .trim()
+    .email()
+    .optional()
+    .or(z.literal("")),
+
+  guest_phone: z
+    .string()
+    .trim()
+    .optional(),
+
+  remarks: z
+    .string()
+    .trim()
+    .optional(),
+});
+
+
+// =====================================================
+// UPDATE RESERVATION
+// =====================================================
+
+export const updateReservationSchema = z.object({
+  reservation_status: z.enum([
+    "Pending",
+    "Confirmed",
+    "Cancelled",
+    "Completed",
+  ]),
+
+  payment_status: z.enum([
+    "Unpaid",
+    "Partial",
+    "Paid",
+  ]),
+});
+
+
+
+// =====================================================
+// TYPES
+// IMPORTANT: THESE MUST BE EXPORTED
+// =====================================================
 
 export type CreateReservationInput =
   z.infer<typeof createReservationSchema>;
 
 export type CreateWalkInReservationInput =
-  z.infer<
-    typeof createWalkInReservationSchema
-  >;
+  z.infer<typeof createWalkInReservationSchema>;
 
 export type UpdateReservationInput =
   z.infer<typeof updateReservationSchema>;

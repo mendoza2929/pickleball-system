@@ -365,15 +365,14 @@ export default function ReservationsPage() {
     loadCourts();
   }, []);
 
-  const [walkInForm, setWalkInForm] = useState({
-      guest_name: "",
-      guest_phone: "",
-      court_id: "",
-      reservation_date: "",
-      start_time: "",
-      end_time: "",
-      remarks: "",
-    });
+ const [walkInForm, setWalkInForm] = useState({
+    customer_id: "",
+    court_id: "",
+    reservation_date: "",
+    start_time: "",
+    end_time: "",
+    remarks: "",
+  });
 
 
   const [savingWalkIn, setSavingWalkIn] =
@@ -385,35 +384,54 @@ export default function ReservationsPage() {
   const handleCreateWalkIn = async () => {
   setWalkInError("");
 
-  if (!walkInForm.guest_name.trim()) {
-    setWalkInError("Customer name is required.");
+  // =====================================================
+  // CUSTOMER
+  // =====================================================
+
+  if (!walkInForm.customer_id) {
+    setWalkInError("Please select a customer.");
     return;
   }
 
-  if (!walkInForm.guest_phone.trim()) {
-    setWalkInError("Phone number is required.");
-    return;
-  }
+  // =====================================================
+  // COURT
+  // =====================================================
 
   if (!walkInForm.court_id) {
     setWalkInError("Please select a court.");
     return;
   }
 
+  // =====================================================
+  // DATE
+  // =====================================================
+
   if (!walkInForm.reservation_date) {
     setWalkInError("Please select a date.");
     return;
   }
+
+  // =====================================================
+  // START TIME
+  // =====================================================
 
   if (!walkInForm.start_time) {
     setWalkInError("Please select a start time.");
     return;
   }
 
+  // =====================================================
+  // END TIME
+  // =====================================================
+
   if (!walkInForm.end_time) {
     setWalkInError("Please select an end time.");
     return;
   }
+
+  // =====================================================
+  // TIME VALIDATION
+  // =====================================================
 
   if (
     walkInForm.end_time <=
@@ -430,6 +448,10 @@ export default function ReservationsPage() {
 
     const reservation =
       await createWalkInReservation({
+        customer_id: Number(
+          walkInForm.customer_id
+        ),
+
         court_id: Number(
           walkInForm.court_id
         ),
@@ -443,27 +465,26 @@ export default function ReservationsPage() {
         end_time:
           walkInForm.end_time,
 
-        guest_name:
-          walkInForm.guest_name.trim(),
-
-        guest_phone:
-          walkInForm.guest_phone.trim(),
-
         remarks:
           walkInForm.remarks.trim() ||
           undefined,
       });
 
-    // Add the new reservation to the table
+    // ===================================================
+    // ADD RESERVATION
+    // ===================================================
+
     setReservations((current) => [
       reservation,
       ...current,
     ]);
 
-    // Reset form
+    // ===================================================
+    // RESET FORM
+    // ===================================================
+
     setWalkInForm({
-      guest_name: "",
-      guest_phone: "",
+      customer_id: "",
       court_id: "",
       reservation_date: "",
       start_time: "",
@@ -472,6 +493,7 @@ export default function ReservationsPage() {
     });
 
     setShowWalkIn(false);
+
   } catch (error: any) {
     console.error(
       "Failed to create walk-in reservation:",
@@ -486,17 +508,17 @@ export default function ReservationsPage() {
     setSavingWalkIn(false);
   }
 };
-
 const handleCloseWalkIn = () => {
-  if (savingWalkIn) return;
+  if (savingWalkIn) {
+    return;
+  }
 
   setShowWalkIn(false);
 
   setWalkInError("");
 
   setWalkInForm({
-    guest_name: "",
-    guest_phone: "",
+    customer_id: "",
     court_id: "",
     reservation_date: "",
     start_time: "",
