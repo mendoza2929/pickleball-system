@@ -17,7 +17,12 @@ const app = express();
 // MIDDLEWARE
 // =====================================================
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  })
+);
 
 app.use(
   helmet({

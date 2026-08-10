@@ -9,7 +9,7 @@ import paymentRoutes from "../modules/payments/payment.routes";
 import availabilityRoutes from "../modules/availability/availability.routes";
 import courtScheduleOverrideRoutes
   from "../modules/courtScheduleOverrides/courtScheduleOverride.routes";
-
+import dashboardRoutes from "../modules/dashboard/dashboard.routes";
 const router = Router();
 
 router.use("/auth", authRoutes);
@@ -20,5 +20,9 @@ router.use("/court-schedules", courtScheduleRoutes);
 router.use("/court-schedule-overrides",courtScheduleOverrideRoutes);
 router.use("/payments", paymentRoutes);
 router.use("/availability", availabilityRoutes);
+router.use(
+  "/dashboard",
+  dashboardRoutes
+);
 
 export default router;
