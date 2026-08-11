@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  BarChart3,
 } from "lucide-react";
 
 import Image from "next/image";
@@ -47,6 +48,11 @@ const navigation = [
     name: "Customers",
     href: "/admin/customers",
     icon: Users,
+  },
+    {
+    name: "Reports",
+    href: "/admin/reports",
+    icon: BarChart3,
   },
 ];
 

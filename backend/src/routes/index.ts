@@ -11,6 +11,8 @@ import courtScheduleOverrideRoutes
   from "../modules/courtScheduleOverrides/courtScheduleOverride.routes";
 import dashboardRoutes from "../modules/dashboard/dashboard.routes";
 import customerRoutes from "../modules/customer/customer.routes";
+import reportRoutes
+  from "../modules/reports/report.routes";
 const router = Router();
 
 router.use("/auth", authRoutes);
@@ -26,5 +28,8 @@ router.use(
   dashboardRoutes
 );
 router.use("/customers", customerRoutes);
-
+router.use(
+  "/reports",
+  reportRoutes
+);
 export default router;
