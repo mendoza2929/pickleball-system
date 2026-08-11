@@ -16,26 +16,6 @@ const navLinks = [
     label: "Courts",
     href: "#courts",
   },
-  {
-    label: "Features",
-    href: "#features",
-  },
-  {
-    label: "Availability",
-    href: "#availability",
-  },
-  {
-    label: "Gallery",
-    href: "#gallery",
-  },
-  {
-    label: "Tournaments",
-    href: "#tournaments",
-  },
-  {
-    label: "Testimonials",
-    href: "#testimonials",
-  },
 ];
 
 export default function Navbar() {
@@ -43,34 +23,42 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-useEffect(() => {
-  const sections = document.querySelectorAll("section[id]");
+  // =====================================================
+  // ACTIVE SECTION
+  // =====================================================
 
-  console.log(sections);
+  useEffect(() => {
+    const sections = document.querySelectorAll("section[id]");
 
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        console.log(
-          entry.target.id,
-          entry.isIntersecting,
-          entry.intersectionRatio
-        );
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleSection = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (a, b) =>
+              b.intersectionRatio - a.intersectionRatio
+          )[0];
 
-        if (entry.isIntersecting) {
-          setActiveSection(entry.target.id);
+        if (visibleSection) {
+          setActiveSection(visibleSection.target.id);
         }
-      });
-    },
-    {
-      threshold: 0.2,
-    }
-  );
+      },
+      {
+        threshold: [0.2, 0.4, 0.6],
+        rootMargin: "-80px 0px -30% 0px",
+      }
+    );
 
-  sections.forEach((section) => observer.observe(section));
+    sections.forEach((section) =>
+      observer.observe(section)
+    );
 
-  return () => observer.disconnect();
-}, []);
+    return () => observer.disconnect();
+  }, []);
+
+  // =====================================================
+  // SCROLL
+  // =====================================================
 
   useEffect(() => {
     const handleScroll = () => {
@@ -85,6 +73,10 @@ useEffect(() => {
       window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   return (
     <>
       <header
@@ -94,33 +86,49 @@ useEffect(() => {
           top-0
           z-50
           transition-all
-          duration-500
+          duration-300
           ${
             scrolled
-              ? "border-b border-white/10 bg-slate-950/80 backdrop-blur-2xl shadow-xl"
+              ? `
+                border-b
+                border-white/10
+                bg-slate-950/90
+                backdrop-blur-xl
+                shadow-lg
+              `
               : "bg-transparent"
           }
         `}
       >
         <Container>
-
           <div className="flex h-20 items-center justify-between">
+            {/* =================================================
+                LOGO
+            ================================================= */}
 
-            {/* Logo */}
+            <Link
+              href="#home"
+              className="shrink-0"
+              onClick={() =>
+                setActiveSection("home")
+              }
+            >
+              <Logo />
+            </Link>
 
-            <Logo />
-
-            {/* Desktop Navigation */}
+            {/* =================================================
+                DESKTOP NAVIGATION
+            ================================================= */}
 
             <nav className="hidden items-center gap-8 xl:flex">
-
               {navLinks.map((item) => {
+                const sectionId =
+                  item.href.replace("#", "");
 
                 const active =
-                  activeSection === item.href.replace("#", "");
+                  activeSection === sectionId;
 
                 return (
-
                   <Link
                     key={item.href}
                     href={item.href}
@@ -129,7 +137,7 @@ useEffect(() => {
                       py-2
                       text-[15px]
                       font-medium
-                      transition-all
+                      transition-colors
                       duration-300
 
                       ${
@@ -139,7 +147,6 @@ useEffect(() => {
                       }
                     `}
                   >
-
                     {item.label}
 
                     <span
@@ -160,36 +167,75 @@ useEffect(() => {
                         }
                       `}
                     />
-
                   </Link>
-
                 );
-
               })}
-
             </nav>
 
-            {/* Right */}
+            {/* =================================================
+                RIGHT SIDE
+            ================================================= */}
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              {/* =================================================
+                  REGISTER CTA
+              ================================================= */}
 
-              {/* Desktop CTA */}
+              <Link
+                href="/register"
+                className="
+                  hidden
+                  xl:inline-flex
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-full
+                  bg-lime-400
+                  px-5
+                  py-2.5
+                  text-sm
+                  font-semibold
+                  text-slate-950
+                  shadow-lg
+                  shadow-lime-400/10
+                  transition-all
+                  duration-300
+                  hover:bg-lime-300
+                  hover:shadow-lime-400/20
+                  hover:-translate-y-0.5
+                  active:translate-y-0
+                "
+              >
+                Register to Play
 
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M4 10H16M16 10L11 5M16 10L11 15"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </Link>
 
-              {/* Mobile */}
+              {/* =================================================
+                  MOBILE MENU
+              ================================================= */}
 
               <MobileMenu
                 open={mobileOpen}
                 onOpenChange={setMobileOpen}
                 activeSection={activeSection}
               />
-
             </div>
-
           </div>
-
         </Container>
-
       </header>
     </>
   );

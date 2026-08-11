@@ -17,7 +17,7 @@ export default function Home() {
 
       <FeaturedCourts />
 
-      <WhyChoose />
+      {/* <WhyChoose />
 
       <AvailabilitySection />
 
@@ -27,7 +27,7 @@ export default function Home() {
 
       <Testimonials />
 
-      <CTA />
+      <CTA /> */}
 
       <Footer />
     </>

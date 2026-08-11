@@ -264,3 +264,55 @@ backdrop-filter:blur(14px);
 html{
     scroll-behavior:smooth;
 }
+
+/* =========================================================
+   FORM CONTROL VISIBILITY
+   ========================================================= */
+
+input,
+textarea,
+select {
+  color: #0f172a;
+  background-color: #ffffff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  color: #0f172a;
+}
+
+select option {
+  color: #0f172a;
+  background-color: #ffffff;
+}
+
+/* Date/time inputs */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  color: #0f172a;
+  background-color: #ffffff;
+}
+
+/* Keep disabled fields readable */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  color: #64748b;
+  background-color: #f8fafc;
+}
+
+/* =========================================================
+   DARK TEXT FOR COMMON UI
+   ========================================================= */
+
+label {
+  color: #334155;
+}
