@@ -46,32 +46,46 @@ export async function findSessionById(
 // FIND SESSION BY DIVISION
 // ==================================================
 
+// ==================================================
+// FIND SESSION BY DIVISION
+// ==================================================
+
 export async function findSessionByDivisionId(
   competitionDivisionId: number
 ) {
   const [rows] = await db.execute(
     `
-    SELECT
-      cs.id,
-      cs.competition_division_id,
-      cs.status,
-      cs.started_at,
-      cs.ended_at,
-      cs.created_at,
-      cs.updated_at
+      SELECT
+        cs.id,
+        cs.competition_division_id,
+        cs.status,
+        cs.started_at,
+        cs.ended_at,
+        cs.created_at,
+        cs.updated_at,
 
-    FROM competition_sessions cs
+        cd.competition_id,
+        cd.name AS division_name,
+        cd.skill_level,
+        cd.format,
+        cd.max_players,
+        cd.entry_fee,
+        cd.status AS division_status
 
-    WHERE cs.competition_division_id = ?
+      FROM competition_sessions cs
 
-    LIMIT 1
+      INNER JOIN competition_divisions cd
+        ON cd.id = cs.competition_division_id
+
+      WHERE cs.competition_division_id = ?
+
+      LIMIT 1
     `,
     [competitionDivisionId]
   );
 
   return (rows as any[])[0] ?? null;
 }
-
 // ==================================================
 // CREATE SESSION
 // ==================================================

@@ -1,3 +1,5 @@
+import db from "../../../config/database";
+
 import {
   createMatch,
   addMatchPlayer,
@@ -37,6 +39,73 @@ const VALID_STATUSES: MatchStatus[] = [
 ];
 
 // ==================================================
+// MATCH FORMAT HELPERS
+// ==================================================
+
+async function getMatchFormat(session: any) {
+  let rawFormat = session?.format;
+
+  // ------------------------------------------------
+  // Fallback: get format directly from division
+  // ------------------------------------------------
+
+  if (
+    !rawFormat &&
+    session?.competition_division_id
+  ) {
+    const [rows] = await db.execute(
+      `
+        SELECT format
+        FROM competition_divisions
+        WHERE id = ?
+        LIMIT 1
+      `,
+      [
+        session.competition_division_id,
+      ]
+    );
+
+    rawFormat =
+      (rows as any[])?.[0]?.format;
+  }
+
+  // ------------------------------------------------
+  // Normalize format
+  // ------------------------------------------------
+
+  const normalizedFormat = String(
+    rawFormat || ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+
+  // ------------------------------------------------
+  // Singles / Doubles
+  // ------------------------------------------------
+
+  const isSingles =
+    normalizedFormat === "single" ||
+    normalizedFormat === "singles";
+
+  const playersPerTeam =
+    isSingles ? 1 : 2;
+
+  return {
+    isSingles,
+
+    playersPerTeam,
+
+    totalPlayersPerMatch:
+      playersPerTeam * 2,
+
+    label: isSingles
+      ? "singles"
+      : "doubles",
+  };
+}
+
+// ==================================================
 // CREATE MATCH FROM QUEUE
 // ==================================================
 
@@ -45,9 +114,9 @@ export async function createMatchFromQueue(
   teamAQueueIds?: number[],
   teamBQueueIds?: number[]
 ) {
-  // ==================================================
-  // 1. CHECK SESSION
-  // ==================================================
+  // ------------------------------------------------
+  // 1. Check session
+  // ------------------------------------------------
 
   const session =
     await findSessionById(
@@ -60,9 +129,9 @@ export async function createMatchFromQueue(
     );
   }
 
-  // ==================================================
-  // 2. SESSION MUST BE LIVE
-  // ==================================================
+  // ------------------------------------------------
+  // 2. Session must be live
+  // ------------------------------------------------
 
   if (session.status !== "live") {
     throw new Error(
@@ -70,9 +139,19 @@ export async function createMatchFromQueue(
     );
   }
 
-  // ==================================================
-  // 3. DETERMINE PLAYERS
-  // ==================================================
+  // ------------------------------------------------
+  // 3. Determine Singles / Doubles
+  // ------------------------------------------------
+
+  const {
+    playersPerTeam,
+    totalPlayersPerMatch,
+    label: matchFormatLabel,
+  } = await getMatchFormat(session);
+
+  // ------------------------------------------------
+  // 4. Determine players
+  // ------------------------------------------------
 
   let teamAssignments: Array<{
     team: "A" | "B";
@@ -89,16 +168,41 @@ export async function createMatchFromQueue(
     teamAQueueIds !== undefined ||
     teamBQueueIds !== undefined
   ) {
+    // ------------------------------------------------
+    // Validate arrays
+    // ------------------------------------------------
+
     if (
       !Array.isArray(teamAQueueIds) ||
-      !Array.isArray(teamBQueueIds) ||
-      teamAQueueIds.length !== 2 ||
-      teamBQueueIds.length !== 2
+      !Array.isArray(teamBQueueIds)
     ) {
       throw new Error(
-        "Team A and Team B must each contain exactly 2 players"
+        "Team A and Team B selections are required"
       );
     }
+
+    // ------------------------------------------------
+    // Validate team sizes
+    // ------------------------------------------------
+
+    if (
+      teamAQueueIds.length !==
+        playersPerTeam ||
+      teamBQueueIds.length !==
+        playersPerTeam
+    ) {
+      throw new Error(
+        `Team A and Team B must each contain exactly ${playersPerTeam} player${
+          playersPerTeam === 1
+            ? ""
+            : "s"
+        }`
+      );
+    }
+
+    // ------------------------------------------------
+    // Convert IDs to numbers
+    // ------------------------------------------------
 
     const selectedIds = [
       ...teamAQueueIds,
@@ -122,11 +226,12 @@ export async function createMatchFromQueue(
     }
 
     // ------------------------------------------------
-    // Player cannot be in both teams
+    // Prevent same queue player in both teams
     // ------------------------------------------------
 
     if (
-      new Set(selectedIds).size !== 4
+      new Set(selectedIds).size !==
+      totalPlayersPerMatch
     ) {
       throw new Error(
         "A player cannot be assigned to both teams"
@@ -134,16 +239,22 @@ export async function createMatchFromQueue(
     }
 
     // ------------------------------------------------
-    // Get queue entries
+    // Load queue entries
     // ------------------------------------------------
 
     const selectedEntries =
       await Promise.all(
         selectedIds.map(
           (queueId) =>
-            findQueueEntryById(queueId)
+            findQueueEntryById(
+              queueId
+            )
         )
       );
+
+    // ------------------------------------------------
+    // Validate entries exist
+    // ------------------------------------------------
 
     if (
       selectedEntries.some(
@@ -186,42 +297,48 @@ export async function createMatchFromQueue(
           "Only waiting players can be added to a new match"
         );
       }
+
+      if (
+        !entry.competition_player_id
+      ) {
+        throw new Error(
+          "Selected queue player has no competition player"
+        );
+      }
     }
 
     // ------------------------------------------------
-    // Map queue IDs → queue entries
+    // Map entries by queue ID
     // ------------------------------------------------
 
     const entryById =
       new Map(
         selectedEntries
           .filter(Boolean)
-          .map(
-            (entry: any) => [
-              Number(entry.id),
-              entry,
-            ]
-          )
+          .map((entry: any) => [
+            Number(entry.id),
+            entry,
+          ])
       );
 
-    // ==================================================
-    // IMPORTANT
+    // =================================================
+    // IMPORTANT:
+    // position MUST be unique inside a match.
     //
-    // position is GLOBAL inside the match:
+    // Singles:
+    // Team A = position 1
+    // Team B = position 2
     //
-    // Team A:
-    //   position 1
-    //   position 2
-    //
-    // Team B:
-    //   position 3
-    //   position 4
-    //
-    // This matches uq_match_position:
-    // (competition_match_id, position)
-    // ==================================================
+    // Doubles:
+    // Team A = positions 1,2
+    // Team B = positions 3,4
+    // =================================================
 
     teamAssignments = [
+      // ------------------------------------------------
+      // TEAM A
+      // ------------------------------------------------
+
       ...teamAQueueIds.map(
         (queueId, index) => {
           const entry =
@@ -231,14 +348,25 @@ export async function createMatchFromQueue(
 
           return {
             team: "A" as const,
-            queueId: Number(queueId),
-            playerId: Number(
-              entry.competition_player_id
-            ),
-            position: index + 1,
+
+            queueId:
+              Number(queueId),
+
+            playerId:
+              Number(
+                entry.competition_player_id
+              ),
+
+            // Team A starts at position 1
+            position:
+              index + 1,
           };
         }
       ),
+
+      // ------------------------------------------------
+      // TEAM B
+      // ------------------------------------------------
 
       ...teamBQueueIds.map(
         (queueId, index) => {
@@ -249,105 +377,151 @@ export async function createMatchFromQueue(
 
           return {
             team: "B" as const,
-            queueId: Number(queueId),
-            playerId: Number(
-              entry.competition_player_id
-            ),
 
-            // Team B starts at position 3
-            position: index + 3,
+            queueId:
+              Number(queueId),
+
+            playerId:
+              Number(
+                entry.competition_player_id
+              ),
+
+            // IMPORTANT:
+            // Team B continues after Team A.
+            //
+            // Singles:
+            // playersPerTeam = 1
+            // B position = 1 + 1 = 2
+            //
+            // Doubles:
+            // playersPerTeam = 2
+            // B positions = 3,4
+            //
+            position:
+              playersPerTeam +
+              index +
+              1,
           };
         }
       ),
     ];
-  }
+  } else {
+    // =================================================
+    // AUTOMATIC MATCH CREATION
+    // =================================================
 
-  // ==================================================
-  // AUTOMATIC MATCH
-  // ==================================================
-
-  else {
     const waitingPlayers =
       await findWaitingQueue(
         competitionSessionId,
-        4
+        totalPlayersPerMatch
       );
 
+    // ------------------------------------------------
+    // Validate player count
+    // ------------------------------------------------
+
     if (
-      waitingPlayers.length < 4
+      waitingPlayers.length <
+      totalPlayersPerMatch
     ) {
       throw new Error(
-        "At least 4 players are required to create a doubles match"
+        `At least ${totalPlayersPerMatch} players are required to create a ${matchFormatLabel} match`
       );
     }
 
     // ------------------------------------------------
-    // Global positions 1,2,3,4
+    // Build assignments
     // ------------------------------------------------
 
-    teamAssignments = [
-      {
-        team: "A",
-        queueId: Number(
-          waitingPlayers[0].id
-        ),
-        playerId: Number(
-          waitingPlayers[0]
-            .competition_player_id
-        ),
-        position: 1,
-      },
+    teamAssignments = [];
 
-      {
-        team: "A",
-        queueId: Number(
-          waitingPlayers[1].id
-        ),
-        playerId: Number(
-          waitingPlayers[1]
-            .competition_player_id
-        ),
-        position: 2,
-      },
+    for (
+      let index = 0;
+      index < totalPlayersPerMatch;
+      index++
+    ) {
+      const team =
+        index < playersPerTeam
+          ? "A"
+          : "B";
 
-      {
-        team: "B",
-        queueId: Number(
-          waitingPlayers[2].id
-        ),
-        playerId: Number(
-          waitingPlayers[2]
-            .competition_player_id
-        ),
-        position: 3,
-      },
+      const player =
+        waitingPlayers[index];
 
-      {
-        team: "B",
-        queueId: Number(
-          waitingPlayers[3].id
-        ),
-        playerId: Number(
-          waitingPlayers[3]
-            .competition_player_id
-        ),
-        position: 4,
-      },
-    ];
+      if (
+        !player.competition_player_id
+      ) {
+        throw new Error(
+          "A waiting player has no competition player"
+        );
+      }
+
+      // ------------------------------------------------
+      // IMPORTANT:
+      //
+      // Position is GLOBAL within the match.
+      //
+      // Singles:
+      // index 0 → A → position 1
+      // index 1 → B → position 2
+      //
+      // Doubles:
+      // index 0 → A → position 1
+      // index 1 → A → position 2
+      // index 2 → B → position 3
+      // index 3 → B → position 4
+      // ------------------------------------------------
+
+      const position =
+        index + 1;
+
+      teamAssignments.push({
+        team,
+
+        queueId:
+          Number(player.id),
+
+        playerId:
+          Number(
+            player.competition_player_id
+          ),
+
+        position,
+      });
+    }
   }
 
-  // ==================================================
-  // 4. CREATE MATCH NUMBER
-  // ==================================================
+  // ------------------------------------------------
+  // Safety check before database insert
+  // ------------------------------------------------
+
+  const positions =
+    teamAssignments.map(
+      (assignment) =>
+        assignment.position
+    );
+
+  if (
+    new Set(positions).size !==
+    positions.length
+  ) {
+    throw new Error(
+      "Duplicate match positions detected before creating the match"
+    );
+  }
+
+  // ------------------------------------------------
+  // 5. Create match number
+  // ------------------------------------------------
 
   const matchNumber =
     await getNextMatchNumber(
       competitionSessionId
     );
 
-  // ==================================================
-  // 5. CREATE MATCH
-  // ==================================================
+  // ------------------------------------------------
+  // 6. Create match
+  // ------------------------------------------------
 
   const matchId =
     await createMatch(
@@ -355,31 +529,44 @@ export async function createMatchFromQueue(
       matchNumber
     );
 
-  // ==================================================
-  // 6. ADD PLAYERS
-  // ==================================================
+  // ------------------------------------------------
+  // 7. Add selected players
+  // ------------------------------------------------
 
-  for (
-    const assignment of teamAssignments
-  ) {
-    await addMatchPlayer(
-      matchId,
-      assignment.playerId,
-      assignment.team,
-      assignment.position
-    );
+  try {
+    for (
+      const assignment of teamAssignments
+    ) {
+      await addMatchPlayer(
+        matchId,
+        assignment.playerId,
+        assignment.team,
+        assignment.position
+      );
 
-    // Queue → matched
+      await updateQueueStatus(
+        assignment.queueId,
+        "matched"
+      );
+    }
+  } catch (error) {
+    // ------------------------------------------------
+    // IMPORTANT:
+    // If inserting players fails, don't leave the
+    // match partially created.
+    //
+    // The safest solution is to delete the match here
+    // if your repository supports deleteMatch().
+    //
+    // For now rethrow the original database error.
+    // ------------------------------------------------
 
-    await updateQueueStatus(
-      assignment.queueId,
-      "matched"
-    );
+    throw error;
   }
 
-  // ==================================================
-  // 7. RETURN MATCH
-  // ==================================================
+  // ------------------------------------------------
+  // 8. Return created match
+  // ------------------------------------------------
 
   return findMatchById(
     matchId
@@ -445,9 +632,9 @@ export async function updateMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Validate status
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     !VALID_STATUSES.includes(
@@ -459,9 +646,9 @@ export async function updateMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Same status
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     match.status === data.status
@@ -469,9 +656,9 @@ export async function updateMatch(
     return match;
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Completed protection
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     match.status === "completed"
@@ -481,9 +668,9 @@ export async function updateMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Cancelled protection
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     match.status === "cancelled"
@@ -493,9 +680,9 @@ export async function updateMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Start playing
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     data.status === "playing"
@@ -519,9 +706,9 @@ export async function updateMatch(
     return startMatch(id);
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Completed
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     data.status === "completed"
@@ -531,9 +718,9 @@ export async function updateMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Other statuses
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   return updateMatchStatus(
     id,
@@ -557,9 +744,9 @@ export async function startMatchPlay(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Must be called
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     match.status !== "called"
@@ -569,9 +756,9 @@ export async function startMatchPlay(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Court required
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     match.court_id === null
@@ -581,9 +768,9 @@ export async function startMatchPlay(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Start match
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   return startMatch(id);
 }
@@ -606,9 +793,9 @@ export async function finishMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 1. Must be playing
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     match.status !== "playing"
@@ -618,9 +805,9 @@ export async function finishMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 2. Validate scores
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     !Number.isInteger(
@@ -635,9 +822,9 @@ export async function finishMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 3. No negative scores
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     teamAScore < 0 ||
@@ -648,9 +835,9 @@ export async function finishMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 4. No tie
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     teamAScore === teamBScore
@@ -660,9 +847,9 @@ export async function finishMatch(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 5. Complete current match
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   const completedMatch =
     await completeMatch(
@@ -671,19 +858,18 @@ export async function finishMatch(
       teamBScore
     );
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 6. Check session
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   const session =
     await findSessionById(
       match.competition_session_id
     );
 
-  // -----------------------------------------------
-  // If session is no longer live,
-  // don't create another match.
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // Session no longer live
+  // ------------------------------------------------
 
   if (
     !session ||
@@ -697,22 +883,33 @@ export async function finishMatch(
     };
   }
 
-  // -----------------------------------------------
-  // 7. Check waiting players
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 7. Determine Singles / Doubles
+  // ------------------------------------------------
+
+  const {
+    totalPlayersPerMatch,
+  } = await getMatchFormat(
+    session
+  );
+
+  // ------------------------------------------------
+  // 8. Check waiting players
+  // ------------------------------------------------
 
   const waitingPlayers =
     await findWaitingQueue(
       match.competition_session_id,
-      4
+      totalPlayersPerMatch
     );
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // Not enough players
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
-    waitingPlayers.length < 4
+    waitingPlayers.length <
+    totalPlayersPerMatch
   ) {
     return {
       completed_match:
@@ -722,9 +919,9 @@ export async function finishMatch(
     };
   }
 
-  // -----------------------------------------------
-  // 8. Create next match
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 9. Create next match
+  // ------------------------------------------------
 
   let nextMatch =
     await createMatchFromQueue(
@@ -740,9 +937,9 @@ export async function finishMatch(
     };
   }
 
-  // -----------------------------------------------
-  // 9. Automatically assign available court
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 10. Automatically assign available court
+  // ------------------------------------------------
 
   try {
     nextMatch =
@@ -750,28 +947,27 @@ export async function finishMatch(
         Number(nextMatch.id)
       );
   } catch (error: any) {
-    // ---------------------------------------------
+    // ----------------------------------------------
     // No available court.
     //
     // Keep match pending.
     // Admin can manually assign a court later.
-    // ---------------------------------------------
+    // ----------------------------------------------
 
     console.log(
       "No court available for next Open Play match:",
       error.message
     );
 
-    // Get latest match state
     nextMatch =
       await findMatchById(
         Number(nextMatch.id)
       );
   }
 
-  // -----------------------------------------------
-  // 10. Return both matches
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 11. Return both matches
+  // ------------------------------------------------
 
   return {
     completed_match:

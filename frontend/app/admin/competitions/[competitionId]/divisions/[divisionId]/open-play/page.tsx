@@ -503,6 +503,32 @@ export default function OpenPlayPage() {
     [teamBIds, waitingPlayers]
   );
 
+  // ==========================================================
+  // MATCH FORMAT
+  // ==========================================================
+
+  // Normalize the session/division format.
+  // Supports: single, singles, Single, SINGLES, single-player, etc.
+  const normalizedFormat = String(
+    session?.format || ""
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+
+  const isSingles =
+    normalizedFormat === "single" ||
+    normalizedFormat === "singles";
+
+  const playersPerTeam =
+    isSingles ? 1 : 2;
+
+  const totalPlayersPerMatch =
+    playersPerTeam * 2;
+
+  const matchFormatLabel =
+    isSingles ? "Singles" : "Doubles";
+
   function removeFromTeams(playerId: number) {
     setTeamAIds((current) =>
       current.filter((id) => id !== playerId)
@@ -537,11 +563,15 @@ export default function OpenPlayPage() {
 
     const teamIsFull =
       team === "A"
-        ? teamAIds.length >= 2
-        : teamBIds.length >= 2;
+        ? teamAIds.length >= playersPerTeam
+        : teamBIds.length >= playersPerTeam;
 
     if (teamIsFull) {
-      setError(`Team ${team} already has 2 players.`);
+      setError(
+        `Team ${team} already has ${playersPerTeam} player${
+          playersPerTeam === 1 ? "" : "s"
+        }.`
+      );
       setDraggedPlayerId(null);
       return;
     }
@@ -550,13 +580,13 @@ export default function OpenPlayPage() {
 
     if (team === "A") {
       setTeamAIds((current) =>
-        current.length < 2
+        current.length < playersPerTeam
           ? [...current, playerId]
           : current
       );
     } else {
       setTeamBIds((current) =>
-        current.length < 2
+        current.length < playersPerTeam
           ? [...current, playerId]
           : current
       );
@@ -1115,11 +1145,15 @@ async function createMatch() {
   // ==================================================
 
   if (
-    teamAPlayers.length !== 2 ||
-    teamBPlayers.length !== 2
+    teamAPlayers.length !== playersPerTeam ||
+    teamBPlayers.length !== playersPerTeam
   ) {
     setError(
-      "Select exactly 2 players for Team A and 2 players for Team B."
+      `Select exactly ${playersPerTeam} player${
+        playersPerTeam === 1 ? "" : "s"
+      } for Team A and ${playersPerTeam} player${
+        playersPerTeam === 1 ? "" : "s"
+      } for Team B.`
     );
     return;
   }
@@ -1138,7 +1172,8 @@ async function createMatch() {
   ];
 
   if (
-    new Set(selectedQueueIds).size !== 4
+    new Set(selectedQueueIds).size !==
+    totalPlayersPerMatch
   ) {
     setError(
       "A player cannot be assigned to both teams."
@@ -1189,15 +1224,7 @@ async function createMatch() {
       }
     );
 
-    // ==================================================
-    // CLEAR SELECTION
-    // ==================================================
-
     clearTeamSelection();
-
-    // ==================================================
-    // REFRESH
-    // ==================================================
 
     await Promise.all([
       loadQueue(session.id),
@@ -1870,7 +1897,7 @@ async function createMatch() {
                 <EmptyState
                   icon={Gamepad2}
                   title="No matches yet"
-                  description="Create a match when four players are waiting in the queue."
+                  description={`Create a ${matchFormatLabel.toLowerCase()} match when ${totalPlayersPerMatch} players are waiting in the queue.`}
                 />
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -2048,7 +2075,7 @@ async function createMatch() {
                 </CardTitle>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Drag players into Team A or Team B to choose the doubles pairing.
+                  Drag players into Team A or Team B to choose the {matchFormatLabel.toLowerCase()} pairing.
                 </p>
               </div>
 
@@ -2072,8 +2099,8 @@ async function createMatch() {
                   disabled={
                     actionLoading ||
                     session.status !== "live" ||
-                    teamAPlayers.length !== 2 ||
-                    teamBPlayers.length !== 2
+                    teamAPlayers.length !== playersPerTeam ||
+                    teamBPlayers.length !== playersPerTeam
                   }
                   className="bg-emerald-600 text-white hover:bg-emerald-700"
                 >
@@ -2083,7 +2110,7 @@ async function createMatch() {
                     <Plus className="mr-2 h-4 w-4" />
                   )}
 
-                  Create Match
+                  Create {matchFormatLabel} Match
                 </Button>
 
               </div>
@@ -2206,7 +2233,7 @@ async function createMatch() {
                     }}
                     className={`min-h-[190px] rounded-xl border-2 border-dashed p-4 transition ${
                       draggedPlayerId !== null &&
-                      teamAPlayers.length < 2
+                      teamAPlayers.length < playersPerTeam
                         ? "border-blue-300 bg-blue-50/50"
                         : "border-blue-100 bg-blue-50/20"
                     }`}
@@ -2218,7 +2245,7 @@ async function createMatch() {
                         </p>
 
                         <p className="text-xs text-slate-500">
-                          {teamAPlayers.length}/2 players
+                          {teamAPlayers.length}/{playersPerTeam} player{playersPerTeam === 1 ? "" : "s"}
                         </p>
                       </div>
 
@@ -2226,7 +2253,7 @@ async function createMatch() {
                         variant="outline"
                         className="border-blue-200 bg-white text-blue-700"
                       >
-                        {teamAPlayers.length}/2
+                        {teamAPlayers.length}/{playersPerTeam}
                       </Badge>
                     </div>
 
@@ -2274,11 +2301,12 @@ async function createMatch() {
                         </div>
                       )}
 
-                      {teamAPlayers.length === 1 && (
-                        <div className="rounded-lg border border-dashed border-blue-100 px-3 py-2 text-center text-xs text-slate-400">
-                          Drop one more player
-                        </div>
-                      )}
+                      {!isSingles &&
+                        teamAPlayers.length === 1 && (
+                          <div className="rounded-lg border border-dashed border-blue-100 px-3 py-2 text-center text-xs text-slate-400">
+                            Drop one more player
+                          </div>
+                        )}
 
                     </div>
                   </div>
@@ -2303,7 +2331,7 @@ async function createMatch() {
                     }}
                     className={`min-h-[190px] rounded-xl border-2 border-dashed p-4 transition ${
                       draggedPlayerId !== null &&
-                      teamBPlayers.length < 2
+                      teamBPlayers.length < playersPerTeam
                         ? "border-violet-300 bg-violet-50/50"
                         : "border-violet-100 bg-violet-50/20"
                     }`}
@@ -2315,7 +2343,7 @@ async function createMatch() {
                         </p>
 
                         <p className="text-xs text-slate-500">
-                          {teamBPlayers.length}/2 players
+                          {teamBPlayers.length}/{playersPerTeam} player{playersPerTeam === 1 ? "" : "s"}
                         </p>
                       </div>
 
@@ -2323,7 +2351,7 @@ async function createMatch() {
                         variant="outline"
                         className="border-violet-200 bg-white text-violet-700"
                       >
-                        {teamBPlayers.length}/2
+                        {teamBPlayers.length}/{playersPerTeam}
                       </Badge>
                     </div>
 
@@ -2371,11 +2399,12 @@ async function createMatch() {
                         </div>
                       )}
 
-                      {teamBPlayers.length === 1 && (
-                        <div className="rounded-lg border border-dashed border-violet-100 px-3 py-2 text-center text-xs text-slate-400">
-                          Drop one more player
-                        </div>
-                      )}
+                      {!isSingles &&
+                        teamBPlayers.length === 1 && (
+                          <div className="rounded-lg border border-dashed border-violet-100 px-3 py-2 text-center text-xs text-slate-400">
+                            Drop one more player
+                          </div>
+                        )}
 
                     </div>
                   </div>
@@ -2386,26 +2415,28 @@ async function createMatch() {
 
                 <div
                   className={`rounded-lg border px-4 py-3 text-sm ${
-                    teamAPlayers.length === 2 &&
-                    teamBPlayers.length === 2
+                    teamAPlayers.length === playersPerTeam &&
+                    teamBPlayers.length === playersPerTeam
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                       : "border-amber-100 bg-amber-50 text-amber-700"
                   }`}
                 >
-                  {teamAPlayers.length === 2 &&
-                  teamBPlayers.length === 2 ? (
+                  {teamAPlayers.length === playersPerTeam &&
+                  teamBPlayers.length === playersPerTeam ? (
                     <span className="font-medium">
-                      Teams ready. You can create the match.
+                      Teams ready. You can create the {matchFormatLabel.toLowerCase()} match.
                     </span>
                   ) : (
                     <>
                       Select{" "}
                       <span className="font-semibold">
-                        2 players for Team A
+                        {playersPerTeam} player
+                        {playersPerTeam === 1 ? "" : "s"} for Team A
                       </span>{" "}
                       and{" "}
                       <span className="font-semibold">
-                        2 players for Team B
+                        {playersPerTeam} player
+                        {playersPerTeam === 1 ? "" : "s"} for Team B
                       </span>
                       .
                     </>
