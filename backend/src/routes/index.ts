@@ -13,6 +13,8 @@ import dashboardRoutes from "../modules/dashboard/dashboard.routes";
 import customerRoutes from "../modules/customer/customer.routes";
 import reportRoutes
   from "../modules/reports/report.routes";
+import settingsRoutes
+  from "../modules/settings/settings.routes";
 const router = Router();
 
 router.use("/auth", authRoutes);
@@ -31,5 +33,10 @@ router.use("/customers", customerRoutes);
 router.use(
   "/reports",
   reportRoutes
+);
+
+router.use(
+  "/settings",
+  settingsRoutes
 );
 export default router;
