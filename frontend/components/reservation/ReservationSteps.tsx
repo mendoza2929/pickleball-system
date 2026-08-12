@@ -341,18 +341,22 @@ const submitReservation = async () => {
   // ==========================================
 
   if (!paymentMethod) {
-    toast.error("Please select a payment method.");
+    toast.error(
+      "Please select a payment method."
+    );
     return;
   }
 
-  if (paymentMethod === "GCASH" && !paymentProof) {
+  if (
+    paymentMethod === "GCASH" &&
+    !paymentProof
+  ) {
     toast.error(
       "Please upload your GCash proof of payment."
     );
     return;
   }
 
-  // TypeScript now knows this is a File
   const proof = paymentProof;
 
   if (!proof) {
@@ -367,7 +371,7 @@ const submitReservation = async () => {
     // 1. CREATE RESERVATION
     // ==========================================
 
-    const reservationResult =
+    const reservation =
       await createReservation.mutateAsync({
         court_id: selectedCourt,
 
@@ -394,14 +398,11 @@ const submitReservation = async () => {
       });
 
     // ==========================================
-    // 2. GET RESERVATION
+    // 2. GET RESERVATION ID
     // ==========================================
 
-    const reservation =
-      reservationResult?.data;
-
     const reservationId =
-      reservation?.id;
+      reservation.id;
 
     if (
       !reservationId ||
@@ -410,7 +411,7 @@ const submitReservation = async () => {
     ) {
       console.error(
         "Invalid reservation response:",
-        reservationResult
+        reservation
       );
 
       throw new Error(
@@ -418,11 +419,22 @@ const submitReservation = async () => {
       );
     }
 
+    console.log(
+      "Created reservation:",
+      reservation
+    );
+
+    console.log(
+      "Reservation ID:",
+      reservationId
+    );
+
     // ==========================================
     // 3. CREATE PAYMENT FORM DATA
     // ==========================================
 
-    const formData = new FormData();
+    const formData =
+      new FormData();
 
     formData.append(
       "reservation_id",
@@ -474,7 +486,6 @@ const submitReservation = async () => {
     );
 
   } catch (error: any) {
-
     console.error(
       "Reservation/payment error:",
       error
