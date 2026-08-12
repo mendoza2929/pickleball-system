@@ -1,22 +1,47 @@
 "use client";
 
-import { CheckCircle2, Clock, Loader2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  Loader2,
+} from "lucide-react";
 
-import { formatTime } from "@/utils/time";
-import { useAvailability } from "@/hooks/useAvailability";
+import {
+  formatTime,
+} from "@/utils/time";
 
-function formatLocalDate(date: Date) {
-  const year = date.getFullYear();
+import {
+  useAvailability,
+} from "@/hooks/useAvailability";
 
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
+function formatLocalDate(
+  date: Date
+) {
+  const year =
+    date.getFullYear();
 
-  const day = String(
-    date.getDate()
-  ).padStart(2, "0");
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(
+      2,
+      "0"
+    );
 
   return `${year}-${month}-${day}`;
+}
+
+interface AvailabilitySlot {
+  start_time: string;
+  end_time: string;
 }
 
 interface Props {
@@ -24,7 +49,9 @@ interface Props {
 
   date: Date;
 
-  selectedTime: string | null;
+  selectedTime:
+    | string
+    | null;
 
   onSelect: (
     start: string,
@@ -50,9 +77,9 @@ export default function TimeSelector({
     formattedDate
   );
 
-  // ============================================================
+  // ==================================================
   // LOADING
-  // ============================================================
+  // ==================================================
 
   if (isLoading) {
     return (
@@ -68,9 +95,9 @@ export default function TimeSelector({
     );
   }
 
-  // ============================================================
+  // ==================================================
   // ERROR
-  // ============================================================
+  // ==================================================
 
   if (isError) {
     return (
@@ -82,14 +109,34 @@ export default function TimeSelector({
     );
   }
 
-  // ============================================================
+  // ==================================================
+  // AVAILABLE SLOTS
+  //
+  // IMPORTANT:
+  //
+  // Backend already filters blocked slots.
+  //
+  // Use ONLY:
+  //
+  // data.available_slots
+  // ==================================================
+
+  const availableSlots:
+    AvailabilitySlot[] =
+    Array.isArray(
+      data?.available_slots
+    )
+      ? data.available_slots
+      : [];
+
+  // ==================================================
   // COURT CLOSED / NO AVAILABLE SLOTS
-  // ============================================================
+  // ==================================================
 
   if (
     !data ||
     data.is_closed ||
-    !data.available_slots?.length
+    availableSlots.length === 0
   ) {
     return (
       <div>
@@ -114,9 +161,9 @@ export default function TimeSelector({
     );
   }
 
-  // ============================================================
+  // ==================================================
   // AVAILABLE SLOTS
-  // ============================================================
+  // ==================================================
 
   return (
     <div>
@@ -135,7 +182,7 @@ export default function TimeSelector({
       </div>
 
       <div className="mt-8 grid gap-5 md:grid-cols-3">
-        {data.available_slots.map(
+        {availableSlots.map(
           (slot) => {
             const active =
               selectedTime ===

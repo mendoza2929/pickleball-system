@@ -1,9 +1,19 @@
-import { Request, Response } from "express";
+import {
+  Request,
+  Response,
+} from "express";
 
-import { AvailabilityService } from "./availability.service";
+import {
+  AvailabilityService,
+} from "./availability.service";
 
-import { asyncHandler } from "../../shared/utils/asyncHandler";
-import { ApiResponse } from "../../utils/apiResponse";
+import {
+  asyncHandler,
+} from "../../shared/utils/asyncHandler";
+
+import {
+  ApiResponse,
+} from "../../utils/apiResponse";
 
 import {
   availabilityQuerySchema,
@@ -18,38 +28,45 @@ export class AvailabilityController {
    *
    * Query:
    *
-   * ?courtId=1
-   * &date=2026-08-15
+   * ?courtId=8
+   * &date=2026-08-31
    */
-  getAvailability = asyncHandler(
-    async (
-      req: Request,
-      res: Response
-    ) => {
-      //------------------------------------
-      // Validate Query
-      //------------------------------------
 
-      const query =
-        availabilityQuerySchema.parse(
-          req.query
+  getAvailability =
+    asyncHandler(
+      async (
+        req: Request,
+        res: Response
+      ) => {
+        // ------------------------------------
+        // Validate Query
+        // ------------------------------------
+
+        const query =
+          availabilityQuerySchema.parse(
+            req.query
+          );
+
+        // ------------------------------------
+        // Get Availability
+        // ------------------------------------
+
+        const result =
+          await this.availabilityService
+            .getAvailability(
+              query.courtId,
+              query.date
+            );
+
+        // ------------------------------------
+        // Response
+        // ------------------------------------
+
+        return ApiResponse.success(
+          res,
+          result,
+          "Availability retrieved successfully."
         );
-
-      //------------------------------------
-      // Get Availability
-      //------------------------------------
-
-      const result =
-        await this.availabilityService.getAvailability(
-          query.courtId,
-          query.date
-        );
-
-      return ApiResponse.success(
-        res,
-        result,
-        "Availability retrieved successfully."
-      );
-    }
-  );
+      }
+    );
 }

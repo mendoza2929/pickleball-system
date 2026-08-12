@@ -36,7 +36,9 @@ import { Input } from "@/components/ui/input";
 // HELPERS
 // ============================================================
 
-function formatDate(value: string | null) {
+function formatDate(
+  value: string | null
+) {
   if (!value) {
     return "No date";
   }
@@ -47,25 +49,206 @@ function formatDate(value: string | null) {
     return "Invalid date";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }
+  ).format(date);
 }
 
 function formatDateRange(
   start: string,
   end: string | null
 ) {
-  const startDate = formatDate(start);
+  const startDate =
+    formatDate(start);
 
   if (!end) {
     return startDate;
   }
 
-  return `${startDate} – ${formatDate(end)}`;
+  return `${startDate} – ${formatDate(
+    end
+  )}`;
 }
+
+// ============================================================
+// DATETIME HELPERS
+// ============================================================
+
+/**
+ * Convert any supported API/form datetime
+ * into datetime-local format:
+ *
+ * YYYY-MM-DDTHH:mm
+ *
+ * Supported:
+ *
+ * 2026-08-29T16:00
+ * 2026-08-29T16:00:00
+ * 2026-08-29T16:00:00.000
+ * 2026-08-29 16:00:00
+ * 08/29/2026 04:00 PM
+ */
+function toDateTimeLocal(
+  value:
+    | string
+    | null
+    | undefined
+): string {
+  if (!value) {
+    return "";
+  }
+
+  const input =
+    String(value).trim();
+
+  // ==========================================================
+  // YYYY-MM-DDTHH:mm
+  // ==========================================================
+
+  let match = input.match(
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/
+  );
+
+  if (match) {
+    return `${match[1]}T${match[2]}:00`;
+  }
+
+  // ==========================================================
+  // ISO
+  //
+  // 2026-08-29T16:00:00
+  // 2026-08-29T16:00:00.000
+  // ==========================================================
+
+  match = input.match(
+    /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?$/
+  );
+
+  if (match) {
+    return `${match[1]}T${match[2]}:00`;
+  }
+
+  // ==========================================================
+  // MYSQL
+  //
+  // 2026-08-29 16:00:00
+  // ==========================================================
+
+  match = input.match(
+    /^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/
+  );
+
+  if (match) {
+    return `${match[1]}T${match[2]}:00`;
+  }
+
+  // ==========================================================
+  // DISPLAY FORMAT
+  //
+  // 08/29/2026 04:00 PM
+  // ==========================================================
+
+  match = input.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)$/i
+  );
+
+  if (match) {
+    const month =
+      Number(match[1]);
+
+    const day =
+      Number(match[2]);
+
+    const year =
+      Number(match[3]);
+
+    let hour =
+      Number(match[4]);
+
+    const minute =
+      Number(match[5]);
+
+    const meridiem =
+      match[6].toUpperCase();
+
+    if (meridiem === "AM") {
+      if (hour === 12) {
+        hour = 0;
+      }
+    } else {
+      if (hour !== 12) {
+        hour += 12;
+      }
+    }
+
+    return `${year}-${String(
+      month
+    ).padStart(
+      2,
+      "0"
+    )}-${String(day).padStart(
+      2,
+      "0"
+    )}T${String(hour).padStart(
+      2,
+      "0"
+    )}:00`;
+  }
+
+  return "";
+}
+
+// ============================================================
+// HOURLY VALIDATION
+// ============================================================
+
+function isHourlyDateTime(
+  value: string
+) {
+  if (!value) {
+    return false;
+  }
+
+  const match =
+    value.match(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:(\d{2})$/
+    );
+
+  if (!match) {
+    return false;
+  }
+
+  return match[1] === "00";
+}
+
+// ============================================================
+// FORMAT DATE FOR API
+// ============================================================
+
+function normalizeDateTimeForApi(
+  value:
+    | string
+    | null
+    | undefined
+) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized =
+    toDateTimeLocal(value);
+
+  return normalized || null;
+}
+
+// ============================================================
+// STATUS
+// ============================================================
 
 function getStatusLabel(
   status: CompetitionStatus
@@ -76,8 +259,10 @@ function getStatusLabel(
   > = {
     draft: "Draft",
     published: "Published",
-    registration_open: "Registration Open",
-    registration_closed: "Registration Closed",
+    registration_open:
+      "Registration Open",
+    registration_closed:
+      "Registration Closed",
     in_progress: "In Progress",
     completed: "Completed",
     cancelled: "Cancelled",
@@ -127,11 +312,17 @@ function getTypeLabel(
 // ============================================================
 
 export default function CompetitionsPage() {
-  const [competitions, setCompetitions] =
-    useState<Competition[]>([]);
+  const [
+    competitions,
+    setCompetitions,
+  ] = useState<Competition[]>([]);
 
-  const [divisionCounts, setDivisionCounts] =
-    useState<Record<number, number>>({});
+  const [
+    divisionCounts,
+    setDivisionCounts,
+  ] = useState<Record<number, number>>(
+    {}
+  );
 
   const [loading, setLoading] =
     useState(true);
@@ -142,23 +333,42 @@ export default function CompetitionsPage() {
   const [search, setSearch] =
     useState("");
 
-  const [statusFilter, setStatusFilter] =
-    useState<CompetitionStatus | "all">("all");
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState<
+    CompetitionStatus | "all"
+  >("all");
 
-  const [typeFilter, setTypeFilter] =
-    useState<CompetitionType | "all">("all");
+  const [
+    typeFilter,
+    setTypeFilter,
+  ] = useState<
+    CompetitionType | "all"
+  >("all");
 
-  const [modalOpen, setModalOpen] =
-    useState(false);
+  const [
+    modalOpen,
+    setModalOpen,
+  ] = useState(false);
 
-  const [editingCompetition, setEditingCompetition] =
-    useState<Competition | null>(null);
+  const [
+    editingCompetition,
+    setEditingCompetition,
+  ] =
+    useState<Competition | null>(
+      null
+    );
 
-  const [deleteTarget, setDeleteTarget] =
-    useState<Competition | null>(null);
+  const [
+    deleteTarget,
+    setDeleteTarget,
+  ] = useState<Competition | null>(
+    null
+  );
 
   // ==========================================================
-  // LOAD COMPETITIONS
+  // LOAD
   // ==========================================================
 
   async function loadCompetitions() {
@@ -171,22 +381,30 @@ export default function CompetitionsPage() {
 
       setCompetitions(data);
 
-      const counts: Record<number, number> = {};
+      const counts: Record<
+        number,
+        number
+      > = {};
 
       await Promise.all(
-        data.map(async (competition) => {
-          try {
-            const divisions =
-              await divisionService.getByCompetition(
-                competition.id
-              );
+        data.map(
+          async (competition) => {
+            try {
+              const divisions =
+                await divisionService.getByCompetition(
+                  competition.id
+                );
 
-            counts[competition.id] =
-              divisions.length;
-          } catch {
-            counts[competition.id] = 0;
+              counts[
+                competition.id
+              ] = divisions.length;
+            } catch {
+              counts[
+                competition.id
+              ] = 0;
+            }
           }
-        })
+        )
       );
 
       setDivisionCounts(counts);
@@ -211,13 +429,15 @@ export default function CompetitionsPage() {
   }, []);
 
   // ==========================================================
-  // SEARCH + FILTER
+  // FILTER
   // ==========================================================
 
   const filteredCompetitions =
     useMemo(() => {
       const value =
-        search.trim().toLowerCase();
+        search
+          .trim()
+          .toLowerCase();
 
       return competitions.filter(
         (competition) => {
@@ -270,7 +490,8 @@ export default function CompetitionsPage() {
   const completed =
     competitions.filter(
       (item) =>
-        item.status === "completed"
+        item.status ===
+        "completed"
     ).length;
 
   // ==========================================================
@@ -289,8 +510,38 @@ export default function CompetitionsPage() {
   function openEdit(
     competition: Competition
   ) {
+    /*
+     * IMPORTANT:
+     *
+     * Do not use:
+     *
+     * competition.start_at.slice(0, 16)
+     *
+     * because the API/database can return
+     * different datetime formats.
+     *
+     * Always convert using toDateTimeLocal().
+     */
+
+    const normalizedCompetition: Competition =
+      {
+        ...competition,
+
+        start_at:
+          competition.start_at,
+
+        end_at:
+          competition.end_at,
+
+        registration_start_at:
+          competition.registration_start_at,
+
+        registration_end_at:
+          competition.registration_end_at,
+      };
+
     setEditingCompetition(
-      competition
+      normalizedCompetition
     );
 
     setModalOpen(true);
@@ -340,15 +591,11 @@ export default function CompetitionsPage() {
 
   return (
     <div className="min-h-full bg-slate-50 text-slate-950">
-
       <div className="mx-auto w-full max-w-7xl px-6 py-8 lg:px-8">
 
-        {/* ==================================================
-            HEADER
-        ================================================== */}
+        {/* HEADER */}
 
         <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
               <Trophy className="h-4 w-4" />
@@ -379,12 +626,9 @@ export default function CompetitionsPage() {
           </Button>
         </div>
 
-        {/* ==================================================
-            SUMMARY
-        ================================================== */}
+        {/* SUMMARY */}
 
         <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
-
           <SummaryCard
             icon={Trophy}
             label="Total Competitions"
@@ -402,21 +646,14 @@ export default function CompetitionsPage() {
             label="Completed"
             value={completed}
           />
-
         </div>
 
-        {/* ==================================================
-            SEARCH / FILTER
-        ================================================== */}
+        {/* SEARCH / FILTER */}
 
         <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
 
-            {/* SEARCH */}
-
             <div className="relative w-full xl:max-w-md">
-
               <Search
                 className="
                   pointer-events-none
@@ -446,18 +683,11 @@ export default function CompetitionsPage() {
                   pl-9
                   !text-slate-950
                   placeholder:!text-slate-400
-                  focus:border-slate-400
-                  focus:ring-slate-200
                 "
               />
-
             </div>
 
-            {/* FILTERS */}
-
             <div className="flex flex-col gap-2 sm:flex-row">
-
-              {/* STATUS */}
 
               <select
                 value={statusFilter}
@@ -479,69 +709,40 @@ export default function CompetitionsPage() {
                   text-sm
                   !text-slate-950
                   outline-none
-                  focus:border-slate-400
-                  focus:ring-2
-                  focus:ring-slate-100
                 "
               >
-                <option
-                  value="all"
-                  className="text-slate-950"
-                >
+                <option value="all">
                   All statuses
                 </option>
 
-                <option
-                  value="draft"
-                  className="text-slate-950"
-                >
+                <option value="draft">
                   Draft
                 </option>
 
-                <option
-                  value="published"
-                  className="text-slate-950"
-                >
+                <option value="published">
                   Published
                 </option>
 
-                <option
-                  value="registration_open"
-                  className="text-slate-950"
-                >
+                <option value="registration_open">
                   Registration Open
                 </option>
 
-                <option
-                  value="registration_closed"
-                  className="text-slate-950"
-                >
+                <option value="registration_closed">
                   Registration Closed
                 </option>
 
-                <option
-                  value="in_progress"
-                  className="text-slate-950"
-                >
+                <option value="in_progress">
                   In Progress
                 </option>
 
-                <option
-                  value="completed"
-                  className="text-slate-950"
-                >
+                <option value="completed">
                   Completed
                 </option>
 
-                <option
-                  value="cancelled"
-                  className="text-slate-950"
-                >
+                <option value="cancelled">
                   Cancelled
                 </option>
               </select>
-
-              {/* TYPE */}
 
               <select
                 value={typeFilter}
@@ -563,46 +764,29 @@ export default function CompetitionsPage() {
                   text-sm
                   !text-slate-950
                   outline-none
-                  focus:border-slate-400
-                  focus:ring-2
-                  focus:ring-slate-100
                 "
               >
-                <option
-                  value="all"
-                  className="text-slate-950"
-                >
+                <option value="all">
                   All types
                 </option>
 
-                <option
-                  value="open_play"
-                  className="text-slate-950"
-                >
+                <option value="open_play">
                   Open Play
                 </option>
 
-                <option
-                  value="tournament"
-                  className="text-slate-950"
-                >
+                <option value="tournament">
                   Tournament
                 </option>
               </select>
-
             </div>
           </div>
         </div>
 
-        {/* ==================================================
-            ERROR
-        ================================================== */}
+        {/* ERROR */}
 
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5">
-
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-
               <div>
                 <p className="font-medium text-red-800">
                   Unable to load competitions
@@ -623,19 +807,15 @@ export default function CompetitionsPage() {
                   border-red-200
                   bg-white
                   !text-red-700
-                  hover:bg-red-50
                 "
               >
                 Try Again
               </Button>
-
             </div>
           </div>
         )}
 
-        {/* ==================================================
-            CONTENT
-        ================================================== */}
+        {/* CONTENT */}
 
         {loading ? (
           <CompetitionLoading />
@@ -653,8 +833,12 @@ export default function CompetitionsPage() {
             }
             onClear={() => {
               setSearch("");
-              setStatusFilter("all");
-              setTypeFilter("all");
+              setStatusFilter(
+                "all"
+              );
+              setTypeFilter(
+                "all"
+              );
             }}
             onCreate={
               openCreate
@@ -662,7 +846,6 @@ export default function CompetitionsPage() {
           />
         ) : (
           <div className="space-y-4">
-
             {filteredCompetitions.map(
               (competition) => (
                 <CompetitionCard
@@ -690,10 +873,8 @@ export default function CompetitionsPage() {
                 />
               )
             )}
-
           </div>
         )}
-
       </div>
 
       {/* CREATE / EDIT */}
@@ -730,7 +911,6 @@ export default function CompetitionsPage() {
           }
         />
       )}
-
     </div>
   );
 }
@@ -750,9 +930,7 @@ function SummaryCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
       <div className="flex items-center gap-3">
-
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
           <Icon className="h-5 w-5 text-slate-600" />
         </div>
@@ -766,9 +944,7 @@ function SummaryCard({
             {value}
           </p>
         </div>
-
       </div>
-
     </div>
   );
 }
@@ -790,9 +966,7 @@ function CompetitionCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
-
       <div className="p-5 sm:p-6">
-
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 
           <div className="min-w-0 flex-1">
@@ -819,20 +993,21 @@ function CompetitionCard({
                 )}
               </span>
 
-              <span className="
-                rounded-full
-                bg-slate-100
-                px-2.5
-                py-1
-                text-xs
-                font-medium
-                !text-slate-700
-              ">
+              <span
+                className="
+                  rounded-full
+                  bg-slate-100
+                  px-2.5
+                  py-1
+                  text-xs
+                  font-medium
+                  !text-slate-700
+                "
+              >
                 {getTypeLabel(
                   competition.type
                 )}
               </span>
-
             </div>
 
             <h2 className="text-lg font-semibold !text-slate-950">
@@ -863,14 +1038,13 @@ function CompetitionCard({
 
                 <span>
                   {divisionCount}{" "}
-                  {divisionCount === 1
+                  {divisionCount ===
+                  1
                     ? "division"
                     : "divisions"}
                 </span>
               </div>
-
             </div>
-
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-100 pt-4 lg:border-t-0 lg:pt-0">
@@ -882,7 +1056,6 @@ function CompetitionCard({
               className="
                 gap-2
                 !text-slate-700
-                hover:!text-slate-950
               "
             >
               <Pencil className="h-4 w-4" />
@@ -897,8 +1070,6 @@ function CompetitionCard({
                 gap-2
                 border-red-200
                 !text-red-600
-                hover:bg-red-50
-                hover:!text-red-700
               "
             >
               <Trash2 className="h-4 w-4" />
@@ -916,11 +1087,8 @@ function CompetitionCard({
               Manage
               <ChevronRight className="h-4 w-4" />
             </Button>
-
           </div>
-
         </div>
-
       </div>
     </div>
   );
@@ -954,10 +1122,65 @@ function CompetitionModal({
   const [error, setError] =
     useState<string | null>(null);
 
+  // ==========================================================
+  // FORM
+  // ==========================================================
+
   const [form, setForm] =
     useState({
       name:
-        competition?.name ?? "",
+        competition?.name ??
+        "",
+
+      type:
+        competition?.type ??
+        ("open_play" as CompetitionType),
+
+      status:
+        competition?.status ??
+        ("draft" as CompetitionStatus),
+
+      /*
+       * IMPORTANT:
+       *
+       * Existing competition values are
+       * converted to datetime-local format.
+       */
+      startAt:
+        toDateTimeLocal(
+          competition?.start_at
+        ),
+
+      endAt:
+        toDateTimeLocal(
+          competition?.end_at
+        ),
+
+      registrationStartAt:
+        toDateTimeLocal(
+          competition?.registration_start_at
+        ),
+
+      registrationEndAt:
+        toDateTimeLocal(
+          competition?.registration_end_at
+        ),
+
+      description:
+        competition?.description ??
+        "",
+    });
+
+  // ==========================================================
+  // IMPORTANT:
+  // RESET FORM WHEN EDIT TARGET CHANGES
+  // ==========================================================
+
+  useEffect(() => {
+    setForm({
+      name:
+        competition?.name ??
+        "",
 
       type:
         competition?.type ??
@@ -968,51 +1191,52 @@ function CompetitionModal({
         ("draft" as CompetitionStatus),
 
       startAt:
-        competition?.start_at
-          ? competition.start_at.slice(
-              0,
-              16
-            )
-          : "",
+        toDateTimeLocal(
+          competition?.start_at
+        ),
 
       endAt:
-        competition?.end_at
-          ? competition.end_at.slice(
-              0,
-              16
-            )
-          : "",
+        toDateTimeLocal(
+          competition?.end_at
+        ),
 
       registrationStartAt:
-        competition?.registration_start_at
-          ? competition.registration_start_at.slice(
-              0,
-              16
-            )
-          : "",
+        toDateTimeLocal(
+          competition?.registration_start_at
+        ),
 
       registrationEndAt:
-        competition?.registration_end_at
-          ? competition.registration_end_at.slice(
-              0,
-              16
-            )
-          : "",
+        toDateTimeLocal(
+          competition?.registration_end_at
+        ),
 
       description:
         competition?.description ??
         "",
     });
 
+    setError(null);
+  }, [competition]);
+
+  // ==========================================================
+  // FIELD
+  // ==========================================================
+
   function updateField(
     field: string,
     value: string
   ) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setForm(
+      (current) => ({
+        ...current,
+        [field]: value,
+      })
+    );
   }
+
+  // ==========================================================
+  // SUBMIT
+  // ==========================================================
 
   async function handleSubmit(
     event: React.FormEvent
@@ -1020,6 +1244,34 @@ function CompetitionModal({
     event.preventDefault();
 
     setError(null);
+
+    // ========================================================
+    // NORMALIZE
+    // ========================================================
+
+    const startAt =
+      normalizeDateTimeForApi(
+        form.startAt
+      );
+
+    const endAt =
+      normalizeDateTimeForApi(
+        form.endAt
+      );
+
+    const registrationStartAt =
+      normalizeDateTimeForApi(
+        form.registrationStartAt
+      );
+
+    const registrationEndAt =
+      normalizeDateTimeForApi(
+        form.registrationEndAt
+      );
+
+    // ========================================================
+    // NAME
+    // ========================================================
 
     if (!form.name.trim()) {
       setError(
@@ -1029,7 +1281,11 @@ function CompetitionModal({
       return;
     }
 
-    if (!form.startAt) {
+    // ========================================================
+    // START
+    // ========================================================
+
+    if (!startAt) {
       setError(
         "Competition start date is required."
       );
@@ -1037,50 +1293,164 @@ function CompetitionModal({
       return;
     }
 
+    if (
+      !isHourlyDateTime(
+        startAt
+      )
+    ) {
+      setError(
+        "Competition start time must be on a 1-hour interval (for example, 6:00 PM, 7:00 PM, or 8:00 PM)."
+      );
+
+      return;
+    }
+
+    // ========================================================
+    // END
+    // ========================================================
+
+    if (
+      endAt &&
+      !isHourlyDateTime(
+        endAt
+      )
+    ) {
+      setError(
+        "Competition end time must be on a 1-hour interval (for example, 6:00 PM, 7:00 PM, or 8:00 PM)."
+      );
+
+      return;
+    }
+
+    // ========================================================
+    // REGISTRATION START
+    // ========================================================
+
+    if (
+      registrationStartAt &&
+      !isHourlyDateTime(
+        registrationStartAt
+      )
+    ) {
+      setError(
+        "Registration opening time must be on a 1-hour interval (for example, 6:00 PM, 7:00 PM, or 8:00 PM)."
+      );
+
+      return;
+    }
+
+    // ========================================================
+    // REGISTRATION END
+    // ========================================================
+
+    if (
+      registrationEndAt &&
+      !isHourlyDateTime(
+        registrationEndAt
+      )
+    ) {
+      setError(
+        "Registration closing time must be on a 1-hour interval (for example, 6:00 PM, 7:00 PM, or 8:00 PM)."
+      );
+
+      return;
+    }
+
+    // ========================================================
+    // DATE ORDER
+    // ========================================================
+
+    if (
+      endAt &&
+      new Date(endAt).getTime() <
+        new Date(startAt).getTime()
+    ) {
+      setError(
+        "Competition end date cannot be before the start date."
+      );
+
+      return;
+    }
+
+    // ========================================================
+    // REGISTRATION ORDER
+    // ========================================================
+
+    if (
+      registrationStartAt &&
+      registrationEndAt &&
+      new Date(
+        registrationEndAt
+      ).getTime() <
+        new Date(
+          registrationStartAt
+        ).getTime()
+    ) {
+      setError(
+        "Registration closing date cannot be before the opening date."
+      );
+
+      return;
+    }
+
+    // ========================================================
+    // SAVE
+    // ========================================================
+
     try {
       setSaving(true);
 
       let result: Competition;
 
+      const payload = {
+        name: form.name.trim(),
+
+        type: form.type,
+
+        status: form.status,
+
+        startAt,
+
+        endAt,
+
+        registrationStartAt,
+
+        registrationEndAt,
+
+        description:
+          form.description.trim() ||
+          null,
+      };
+
+      console.log(
+        "[Competition] Saving payload:",
+        payload
+      );
+
       if (isEdit) {
         result =
           await competitionService.update(
             competition!.id,
-            {
-              name: form.name.trim(),
-              type: form.type,
-              status: form.status,
-              startAt:
-                form.startAt,
-              endAt:
-                form.endAt || null,
-              registrationStartAt:
-                form.registrationStartAt ||
-                null,
-              registrationEndAt:
-                form.registrationEndAt ||
-                null,
-              description:
-                form.description.trim() ||
-                null,
-            }
+            payload
           );
       } else {
         result =
           await competitionService.create(
             {
-              name: form.name.trim(),
+              name:
+                form.name.trim(),
+
               type: form.type,
+
               startAt:
-                form.startAt,
-              endAt:
-                form.endAt || null,
-              registrationStartAt:
-                form.registrationStartAt ||
-                null,
-              registrationEndAt:
-                form.registrationEndAt ||
-                null,
+                startAt,
+
+              endAt,
+
+              registrationStartAt,
+
+              registrationEndAt,
+
               description:
                 form.description.trim() ||
                 null,
@@ -1090,6 +1460,11 @@ function CompetitionModal({
 
       await onSaved(result);
     } catch (err: any) {
+      console.error(
+        "[Competition] Save error:",
+        err
+      );
+
       setError(
         err?.response?.data?.message ||
           err?.message ||
@@ -1099,6 +1474,10 @@ function CompetitionModal({
       setSaving(false);
     }
   }
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
@@ -1126,6 +1505,7 @@ function CompetitionModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={saving}
             className="
               rounded-lg
               p-2
@@ -1136,14 +1516,16 @@ function CompetitionModal({
           >
             <X className="h-5 w-5" />
           </button>
-
         </div>
+
+        {/* FORM */}
 
         <form
           onSubmit={handleSubmit}
         >
-
           <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-6">
+
+            {/* ERROR */}
 
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm !text-red-700">
@@ -1273,10 +1655,9 @@ function CompetitionModal({
                   </select>
                 </div>
               )}
-
             </div>
 
-            {/* DATES */}
+            {/* COMPETITION DATES */}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 
@@ -1301,13 +1682,11 @@ function CompetitionModal({
                   )
                 }
               />
-
             </div>
 
             {/* REGISTRATION */}
 
             <div>
-
               <p className="mb-3 text-sm font-medium !text-slate-700">
                 Registration Period
               </p>
@@ -1346,13 +1725,14 @@ function CompetitionModal({
             {/* DESCRIPTION */}
 
             <div>
-
               <label className="mb-1.5 block text-sm font-medium !text-slate-700">
                 Description
               </label>
 
               <textarea
-                value={form.description}
+                value={
+                  form.description
+                }
                 onChange={(event) =>
                   updateField(
                     "description",
@@ -1379,9 +1759,7 @@ function CompetitionModal({
                   focus:ring-slate-100
                 "
               />
-
             </div>
-
           </div>
 
           {/* FOOTER */}
@@ -1410,9 +1788,7 @@ function CompetitionModal({
             </Button>
 
           </div>
-
         </form>
-
       </div>
     </div>
   );
@@ -1422,6 +1798,33 @@ function CompetitionModal({
 // DATE FIELD
 // ============================================================
 
+const HOURLY_OPTIONS = [
+  { value: "00:00", label: "12:00 AM" },
+  { value: "01:00", label: "1:00 AM" },
+  { value: "02:00", label: "2:00 AM" },
+  { value: "03:00", label: "3:00 AM" },
+  { value: "04:00", label: "4:00 AM" },
+  { value: "05:00", label: "5:00 AM" },
+  { value: "06:00", label: "6:00 AM" },
+  { value: "07:00", label: "7:00 AM" },
+  { value: "08:00", label: "8:00 AM" },
+  { value: "09:00", label: "9:00 AM" },
+  { value: "10:00", label: "10:00 AM" },
+  { value: "11:00", label: "11:00 AM" },
+  { value: "12:00", label: "12:00 PM" },
+  { value: "13:00", label: "1:00 PM" },
+  { value: "14:00", label: "2:00 PM" },
+  { value: "15:00", label: "3:00 PM" },
+  { value: "16:00", label: "4:00 PM" },
+  { value: "17:00", label: "5:00 PM" },
+  { value: "18:00", label: "6:00 PM" },
+  { value: "19:00", label: "7:00 PM" },
+  { value: "20:00", label: "8:00 PM" },
+  { value: "21:00", label: "9:00 PM" },
+  { value: "22:00", label: "10:00 PM" },
+  { value: "23:00", label: "11:00 PM" },
+];
+
 function DateField({
   label,
   value,
@@ -1429,35 +1832,113 @@ function DateField({
 }: {
   label: string;
   value: string;
-  onChange: (
-    value: string
-  ) => void;
+  onChange: (value: string) => void;
 }) {
+  const date = value?.split("T")[0] ?? "";
+
+  const rawTime =
+    value?.split("T")[1]?.slice(0, 5) ?? "";
+
+  // Existing records can contain minutes such as 10:36 PM.
+  // Convert the displayed value to the nearest lower hour.
+  const time = HOURLY_OPTIONS.some(
+    (option) => option.value === rawTime
+  )
+    ? rawTime
+    : rawTime
+      ? `${rawTime.slice(0, 2)}:00`
+      : "00:00";
+
+  function handleDateChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const newDate = event.target.value;
+
+    if (!newDate) {
+      onChange("");
+      return;
+    }
+
+    onChange(`${newDate}T${time}`);
+  }
+
+  function handleTimeChange(
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) {
+    const newTime = event.target.value;
+
+    if (!date) {
+      return;
+    }
+
+    onChange(`${date}T${newTime}`);
+  }
+
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium !text-slate-700">
         {label}
       </label>
 
-      <Input
-        type="datetime-local"
-        value={value}
-        onChange={(event) =>
-          onChange(
-            event.target.value
-          )
-        }
-        className="
-          bg-white
-          !text-slate-950
-        "
-      />
+      <div className="grid grid-cols-[1fr_140px] gap-2">
+        {/* DATE */}
+
+        <Input
+          type="date"
+          value={date}
+          onChange={handleDateChange}
+          className="
+            h-10
+            bg-white
+            !text-slate-950
+          "
+        />
+
+        {/* HOURLY TIME */}
+
+        <select
+          value={time}
+          onChange={handleTimeChange}
+          disabled={!date}
+          className="
+            h-10
+            w-full
+            rounded-lg
+            border
+            border-slate-200
+            bg-white
+            px-3
+            text-sm
+            !text-slate-950
+            outline-none
+            focus:border-slate-400
+            focus:ring-2
+            focus:ring-slate-100
+            disabled:cursor-not-allowed
+            disabled:bg-slate-50
+            disabled:text-slate-400
+          "
+        >
+          {HOURLY_OPTIONS.map((option) => (
+            <option
+              key={option.value}
+              value={option.value}
+            >
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <p className="mt-1 text-xs text-slate-400">
+        Time is available in 1-hour intervals only.
+      </p>
     </div>
   );
 }
 
 // ============================================================
-// DELETE MODAL
+// // DELETE MODAL
 // ============================================================
 
 function DeleteModal({
@@ -1466,7 +1947,9 @@ function DeleteModal({
   onConfirm,
 }: {
   competition: Competition;
+
   onClose: () => void;
+
   onConfirm: () => Promise<void>;
 }) {
   const [deleting, setDeleting] =
@@ -1475,6 +1958,7 @@ function DeleteModal({
   async function confirm() {
     try {
       setDeleting(true);
+
       await onConfirm();
     } finally {
       setDeleting(false);
@@ -1530,7 +2014,6 @@ function DeleteModal({
           </Button>
 
         </div>
-
       </div>
     </div>
   );
@@ -1543,7 +2026,6 @@ function DeleteModal({
 function CompetitionLoading() {
   return (
     <div className="space-y-4">
-
       {Array.from({
         length: 4,
       }).map((_, index) => (
@@ -1558,7 +2040,6 @@ function CompetitionLoading() {
           <div className="mt-4 h-4 w-80 rounded bg-slate-100" />
         </div>
       ))}
-
     </div>
   );
 }
@@ -1573,7 +2054,9 @@ function EmptyState({
   onCreate,
 }: {
   hasFilters: boolean;
+
   onClear: () => void;
+
   onCreate: () => void;
 }) {
   return (
@@ -1600,7 +2083,6 @@ function EmptyState({
       </p>
 
       <div className="mt-5">
-
         {hasFilters ? (
           <Button
             type="button"
@@ -1620,7 +2102,6 @@ function EmptyState({
             New Competition
           </Button>
         )}
-
       </div>
     </div>
   );

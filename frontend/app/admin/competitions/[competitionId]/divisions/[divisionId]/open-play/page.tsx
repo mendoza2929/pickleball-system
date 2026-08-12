@@ -12,6 +12,7 @@ import {
   Gamepad2,
   GripVertical,
   Loader2,
+  Minus,
   Eye,
   MapPin,
   Pause,
@@ -459,6 +460,13 @@ export default function OpenPlayPage() {
     useState(false);
 
   // ==========================================================
+  // CANCEL REGISTRATION CONFIRMATION
+  // ==========================================================
+
+  const [cancelRegistration, setCancelRegistration] =
+    useState<Registration | null>(null);
+
+  // ==========================================================
   // MANUAL TEAM SELECTION
   // ==========================================================
 
@@ -470,6 +478,51 @@ export default function OpenPlayPage() {
 
   const [draggedPlayerId, setDraggedPlayerId] =
     useState<number | null>(null);
+
+  // ==========================================================
+  // MATCH SCORE DRAFTS
+  // ==========================================================
+
+  const [matchScores, setMatchScores] = useState<
+    Record<number, { teamA: number; teamB: number }>
+  >({});
+
+  function getMatchScore(
+    match: Match,
+    team: "A" | "B"
+  ) {
+    const draft = matchScores[match.id];
+
+    if (team === "A") {
+      return draft?.teamA ?? Number(match.team_a_score ?? 0);
+    }
+
+    return draft?.teamB ?? Number(match.team_b_score ?? 0);
+  }
+
+  function changeMatchScore(
+    match: Match,
+    team: "A" | "B",
+    delta: number
+  ) {
+    setMatchScores((current) => {
+      const existing = current[match.id] ?? {
+        teamA: Number(match.team_a_score ?? 0),
+        teamB: Number(match.team_b_score ?? 0),
+      };
+
+      const key =
+        team === "A" ? "teamA" : "teamB";
+
+      return {
+        ...current,
+        [match.id]: {
+          ...existing,
+          [key]: Math.max(0, existing[key] + delta),
+        },
+      };
+    });
+  }
 
   const waitingPlayers = useMemo(
     () =>
@@ -1038,6 +1091,59 @@ export default function OpenPlayPage() {
   }
 
   // ==========================================================
+  // CANCEL REGISTRATION
+  // ==========================================================
+
+  function handleCancelRegistration(
+    registration: Registration
+  ) {
+    if (registration.status !== "pending") {
+      setError(
+        "Only pending registrations can be cancelled."
+      );
+      return;
+    }
+
+    setCancelRegistration(registration);
+  }
+
+  async function confirmCancelRegistration() {
+    if (!cancelRegistration) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setError(null);
+
+      await api.patch(
+        `/competitions/registrations/${cancelRegistration.id}`,
+        {
+          status: "cancelled",
+        }
+      );
+
+      await loadRegistrations();
+
+      setCancelRegistration(null);
+      setPaymentReviewOpen(false);
+      setSelectedRegistration(null);
+    } catch (err: any) {
+      console.error(
+        "Cancel registration error:",
+        err
+      );
+
+      setError(
+        err?.response?.data?.message ||
+          "Unable to cancel registration."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // ==========================================================
   // CHECK IN PLAYER
   // ==========================================================
 
@@ -1245,31 +1351,129 @@ async function createMatch() {
   }
 }
   // ==========================================================
+  // CALL MATCH
+  // ==========================================================
+
+  async function callMatch(match: Match) {
+    if (!match.court_id) {
+      setError(
+        "A court must be assigned before calling the players."
+      );
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setError(null);
+
+      await api.patch(
+        `/competitions/matches/${match.id}`,
+        {
+          status: "called",
+        }
+      );
+
+      if (session) {
+        await loadMatches(session.id);
+        await loadQueue(session.id);
+      }
+    } catch (err: any) {
+      console.error("Call match error:", err);
+
+      setError(
+        err?.response?.data?.message ||
+          "Unable to call players."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // ==========================================================
   // START MATCH
   // ==========================================================
 
-  async function startMatch(
-    matchId: number
-  ) {
+  async function startMatch(matchId: number) {
     try {
       setActionLoading(true);
+      setError(null);
 
       await api.patch(
         `/competitions/matches/${matchId}/start`
       );
 
       if (session) {
-        await loadMatches(
-          session.id
-        );
-        await loadQueue(
-          session.id
-        );
+        await loadMatches(session.id);
+        await loadQueue(session.id);
       }
     } catch (err: any) {
+      console.error("Start match error:", err);
+
       setError(
         err?.response?.data?.message ||
           "Unable to start match."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // ==========================================================
+  // COMPLETE MATCH
+  // ==========================================================
+
+  async function completeMatchResult(match: Match) {
+    const teamAScore = getMatchScore(match, "A");
+    const teamBScore = getMatchScore(match, "B");
+
+    if (
+      !Number.isInteger(teamAScore) ||
+      !Number.isInteger(teamBScore) ||
+      teamAScore < 0 ||
+      teamBScore < 0
+    ) {
+      setError("Scores must be valid whole numbers.");
+      return;
+    }
+
+    if (teamAScore === teamBScore) {
+      setError("A match cannot end in a tie.");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setError(null);
+
+      await api.post(
+        `/competitions/matches/${match.id}/complete`,
+        {
+          teamAScore,
+          teamBScore,
+        }
+      );
+
+      setMatchScores((current) => {
+        const next = { ...current };
+        delete next[match.id];
+        return next;
+      });
+
+      if (session) {
+        await Promise.all([
+          loadMatches(session.id),
+          loadQueue(session.id),
+        ]);
+      }
+    } catch (err: any) {
+      console.error(
+        "Complete match error:",
+        err
+      );
+
+      setError(
+        err?.response?.data?.message ||
+          "Unable to complete match."
       );
     } finally {
       setActionLoading(false);
@@ -1897,29 +2101,45 @@ async function createMatch() {
                 <EmptyState
                   icon={Gamepad2}
                   title="No matches yet"
-                  description={`Create a ${matchFormatLabel.toLowerCase()} match when ${totalPlayersPerMatch} players are waiting in the queue.`}
+                  description={`Create a ${matchFormatLabel.toLowerCase()} match when ${totalPlayersPerMatch} players are waiting in the queue. Teams are ${playersPerTeam} player${playersPerTeam === 1 ? "" : "s"} each.`}
                 />
               ) : (
                 <div className="divide-y divide-slate-100">
+                  {matches.map((match) => {
+                    const teamAScore =
+                      getMatchScore(match, "A");
 
-                  {matches.map(
-                    (match) => (
+                    const teamBScore =
+                      getMatchScore(match, "B");
+
+                    const teamAWon =
+                      match.status === "completed" &&
+                      Number(match.team_a_score) >
+                        Number(match.team_b_score);
+
+                    const teamBWon =
+                      match.status === "completed" &&
+                      Number(match.team_b_score) >
+                        Number(match.team_a_score);
+
+                    return (
                       <div
                         key={match.id}
-                        className="px-5 py-4"
+                        className={`px-5 py-5 ${
+                          match.status === "playing"
+                            ? "bg-emerald-50/30"
+                            : ""
+                        }`}
                       >
-
-                        <div className="mb-3 flex items-center justify-between">
+                        {/* MATCH HEADER */}
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-slate-900">
-                              Match #
-                              {match.match_number}
+                              Match #{match.match_number}
                             </span>
 
                             <MatchStatusBadge
-                              status={
-                                match.status
-                              }
+                              status={match.status}
                             />
                           </div>
 
@@ -1933,28 +2153,39 @@ async function createMatch() {
                           </div>
                         </div>
 
+                        {/* TEAMS */}
                         <div className="grid grid-cols-2 gap-3">
+                          {/* TEAM A */}
+                          <div
+                            className={`rounded-xl border p-4 ${
+                              teamAWon
+                                ? "border-blue-300 bg-blue-50"
+                                : "border-blue-100 bg-blue-50/60"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600">
+                                Team A
+                              </p>
 
-                          <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
-                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-blue-600">
-                              Team A
-                            </p>
+                              {teamAWon && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-blue-200 bg-white text-blue-700"
+                                >
+                                  Winner
+                                </Badge>
+                              )}
+                            </div>
 
-                            <div className="space-y-1">
-                              {(match.players ||
-                                [])
+                            <div className="mt-3 space-y-1">
+                              {(match.players || [])
                                 .filter(
-                                  (
-                                    player
-                                  ) =>
-                                    player.team ===
-                                    "A"
+                                  (player) =>
+                                    player.team === "A"
                                 )
                                 .map(
-                                  (
-                                    player,
-                                    index
-                                  ) => (
+                                  (player, index) => (
                                     <p
                                       key={
                                         player.id ??
@@ -1962,44 +2193,94 @@ async function createMatch() {
                                       }
                                       className="text-sm font-medium text-slate-800"
                                     >
-                                      {getPlayerName(
-                                        player
-                                      )}
+                                      {getPlayerName(player)}
                                     </p>
                                   )
                                 )}
                             </div>
 
-                            {match.team_a_score !=
-                              null && (
-                              <p className="mt-2 text-2xl font-bold text-blue-700">
-                                {
-                                  match.team_a_score
-                                }
-                              </p>
+                            {match.status === "playing" ? (
+                              <div className="mt-4 flex items-center justify-between gap-2">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="outline"
+                                  onClick={() =>
+                                    changeMatchScore(
+                                      match,
+                                      "A",
+                                      -1
+                                    )
+                                  }
+                                  disabled={
+                                    actionLoading ||
+                                    teamAScore <= 0
+                                  }
+                                  className="h-9 w-9 border-blue-200 bg-white text-blue-700"
+                                >
+                                  <Minus className="h-4 w-4" />
+                                </Button>
+
+                                <span className="text-4xl font-bold text-blue-700">
+                                  {teamAScore}
+                                </span>
+
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  onClick={() =>
+                                    changeMatchScore(
+                                      match,
+                                      "A",
+                                      1
+                                    )
+                                  }
+                                  disabled={actionLoading}
+                                  className="h-9 w-9 bg-blue-600 text-white hover:bg-blue-700"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              match.team_a_score != null && (
+                                <p className="mt-3 text-3xl font-bold text-blue-700">
+                                  {match.team_a_score}
+                                </p>
+                              )
                             )}
                           </div>
 
-                          <div className="rounded-lg border border-violet-100 bg-violet-50/60 p-3">
-                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-violet-600">
-                              Team B
-                            </p>
+                          {/* TEAM B */}
+                          <div
+                            className={`rounded-xl border p-4 ${
+                              teamBWon
+                                ? "border-violet-300 bg-violet-50"
+                                : "border-violet-100 bg-violet-50/60"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600">
+                                Team B
+                              </p>
 
-                            <div className="space-y-1">
-                              {(match.players ||
-                                [])
+                              {teamBWon && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-violet-200 bg-white text-violet-700"
+                                >
+                                  Winner
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="mt-3 space-y-1">
+                              {(match.players || [])
                                 .filter(
-                                  (
-                                    player
-                                  ) =>
-                                    player.team ===
-                                    "B"
+                                  (player) =>
+                                    player.team === "B"
                                 )
                                 .map(
-                                  (
-                                    player,
-                                    index
-                                  ) => (
+                                  (player, index) => (
                                     <p
                                       key={
                                         player.id ??
@@ -2007,38 +2288,97 @@ async function createMatch() {
                                       }
                                       className="text-sm font-medium text-slate-800"
                                     >
-                                      {getPlayerName(
-                                        player
-                                      )}
+                                      {getPlayerName(player)}
                                     </p>
                                   )
                                 )}
                             </div>
 
-                            {match.team_b_score !=
-                              null && (
-                              <p className="mt-2 text-2xl font-bold text-violet-700">
-                                {
-                                  match.team_b_score
-                                }
-                              </p>
+                            {match.status === "playing" ? (
+                              <div className="mt-4 flex items-center justify-between gap-2">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="outline"
+                                  onClick={() =>
+                                    changeMatchScore(
+                                      match,
+                                      "B",
+                                      -1
+                                    )
+                                  }
+                                  disabled={
+                                    actionLoading ||
+                                    teamBScore <= 0
+                                  }
+                                  className="h-9 w-9 border-violet-200 bg-white text-violet-700"
+                                >
+                                  <Minus className="h-4 w-4" />
+                                </Button>
+
+                                <span className="text-4xl font-bold text-violet-700">
+                                  {teamBScore}
+                                </span>
+
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  onClick={() =>
+                                    changeMatchScore(
+                                      match,
+                                      "B",
+                                      1
+                                    )
+                                  }
+                                  disabled={actionLoading}
+                                  className="h-9 w-9 bg-violet-600 text-white hover:bg-violet-700"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              match.team_b_score != null && (
+                                <p className="mt-3 text-3xl font-bold text-violet-700">
+                                  {match.team_b_score}
+                                </p>
+                              )
                             )}
                           </div>
-
                         </div>
 
-                        {match.status ===
-                          "called" && (
+                        {/* MATCH ACTIONS */}
+                        {match.status === "pending" && (
+                          <div className="mt-4">
+                            {match.court_id ? (
+                              <Button
+                                size="sm"
+                                className="w-full bg-amber-500 text-white hover:bg-amber-600"
+                                onClick={() =>
+                                  callMatch(match)
+                                }
+                                disabled={actionLoading}
+                              >
+                                <Users className="mr-2 h-4 w-4" />
+                                Call Players
+                              </Button>
+                            ) : (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs text-amber-700">
+                                Waiting for an available court.
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {match.status === "called" && (
                           <Button
                             size="sm"
-                            className="mt-3 w-full bg-emerald-600 text-white hover:bg-emerald-700"
+                            className="mt-4 w-full bg-emerald-600 text-white hover:bg-emerald-700"
                             onClick={() =>
-                              startMatch(
-                                match.id
-                              )
+                              startMatch(match.id)
                             }
                             disabled={
-                              actionLoading
+                              actionLoading ||
+                              !match.court_id
                             }
                           >
                             <Play className="mr-2 h-4 w-4" />
@@ -2046,13 +2386,62 @@ async function createMatch() {
                           </Button>
                         )}
 
-                      </div>
-                    )
-                  )}
+                        {match.status === "playing" && (
+                          <div className="mt-4">
+                            <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
+                              <p className="text-xs font-medium text-emerald-700">
+                                Live Score
+                              </p>
 
+                              <p className="mt-1 text-sm font-semibold text-emerald-800">
+                                {teamAScore} - {teamBScore}
+                              </p>
+                            </div>
+
+                            <Button
+                              size="sm"
+                              className="w-full bg-slate-900 text-white hover:bg-slate-800"
+                              onClick={() =>
+                                completeMatchResult(match)
+                              }
+                              disabled={
+                                actionLoading ||
+                                teamAScore === teamBScore
+                              }
+                            >
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Finish Match
+                            </Button>
+                          </div>
+                        )}
+
+                        {match.status === "completed" && (
+                          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-center">
+                            <p className="text-xs font-medium text-blue-600">
+                              Match Completed
+                            </p>
+
+                            <p className="mt-1 text-sm font-bold text-blue-800">
+                              {teamAWon
+                                ? "Team A wins"
+                                : "Team B wins"}
+                            </p>
+
+                            {match.completed_at && (
+                              <p className="mt-1 text-xs text-blue-600">
+                                Completed{" "}
+                                {formatTime(
+                                  match.completed_at
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-
             </CardContent>
           </Card>
 
@@ -2478,6 +2867,87 @@ async function createMatch() {
 
 
         {/* ==================================================
+            CANCEL REGISTRATION CONFIRMATION MODAL
+        ================================================== */}
+        {cancelRegistration && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-registration-title"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !actionLoading) {
+                setCancelRegistration(null);
+              }
+            }}
+          >
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+              <div className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-50">
+                    <AlertTriangle className="h-6 w-6 text-red-600" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <h2
+                      id="cancel-registration-title"
+                      className="text-lg font-semibold text-slate-950"
+                    >
+                      Cancel pending registration?
+                    </h2>
+
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      Cancel the pending registration for{' '}
+                      <span className="font-semibold text-slate-800">
+                        {[
+                          cancelRegistration.first_name,
+                          cancelRegistration.last_name,
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || "this player"}
+                      </span>
+                      ?
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                  <p className="text-sm leading-5 text-red-700">
+                    This will mark the registration as cancelled. The player/customer record will not be deleted.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCancelRegistration(null)}
+                  disabled={actionLoading}
+                  className="border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                >
+                  Keep Registration
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={confirmCancelRegistration}
+                  disabled={actionLoading}
+                  className="bg-red-600 text-white shadow-sm hover:bg-red-700"
+                >
+                  {actionLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <XCircle className="mr-2 h-4 w-4" />
+                  )}
+                  {actionLoading ? "Cancelling..." : "Cancel Registration"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================
             PAYMENT REVIEW MODAL
         ================================================== */}
 
@@ -2725,18 +3195,24 @@ async function createMatch() {
 
               <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs text-slate-500">
-                  {selectedRegistration.payment_status === "confirmed" ? (
-                    <span className="font-medium text-emerald-600">
-                      Payment verified. You can now confirm this registration.
-                    </span>
+                  {selectedRegistration.status === "pending" ? (
+                    selectedRegistration.payment_status === "confirmed" ? (
+                      <span className="font-medium text-emerald-600">
+                        Payment verified. You can now confirm or cancel this registration.
+                      </span>
+                    ) : (
+                      <span>
+                        Verify the payment before confirming this registration.
+                      </span>
+                    )
                   ) : (
                     <span>
-                      Verify the payment before confirming this registration.
+                      Registration status: {selectedRegistration.status}
                     </span>
                   )}
                 </div>
 
-                <div className="flex justify-end gap-3">
+                <div className="flex flex-wrap justify-end gap-3">
                   <Button
                     type="button"
                     variant="outline"
@@ -2744,45 +3220,68 @@ async function createMatch() {
                     disabled={actionLoading}
                     className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                   >
-                    Cancel
+                    Close
                   </Button>
 
-                  {selectedRegistration.payment_status !== "confirmed" ? (
+                  {selectedRegistration.status === "pending" && (
                     <Button
                       type="button"
+                      variant="outline"
                       onClick={() =>
-                        handleVerifyPayment(selectedRegistration)
-                      }
-                      disabled={
-                        actionLoading ||
-                        !getPaymentProofUrl(selectedRegistration)
-                      }
-                      className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-500"
-                    >
-                      {actionLoading ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                      )}
-                      Verify Payment
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        handleConfirmRegistration(selectedRegistration)
+                        handleCancelRegistration(selectedRegistration)
                       }
                       disabled={actionLoading}
-                      className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
+                      className="border-red-200 bg-white text-red-600 hover:bg-red-50"
                     >
                       {actionLoading ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        <XCircle className="mr-2 h-4 w-4" />
                       )}
-                      Confirm Registration
+                      Cancel Registration
                     </Button>
                   )}
+
+                  {selectedRegistration.status === "pending" &&
+                    selectedRegistration.payment_status !== "confirmed" && (
+                      <Button
+                        type="button"
+                        onClick={() =>
+                          handleVerifyPayment(selectedRegistration)
+                        }
+                        disabled={
+                          actionLoading ||
+                          !getPaymentProofUrl(selectedRegistration)
+                        }
+                        className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-500"
+                      >
+                        {actionLoading ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                        )}
+                        Verify Payment
+                      </Button>
+                    )}
+
+                  {selectedRegistration.status === "pending" &&
+                    selectedRegistration.payment_status === "confirmed" && (
+                      <Button
+                        type="button"
+                        onClick={() =>
+                          handleConfirmRegistration(selectedRegistration)
+                        }
+                        disabled={actionLoading}
+                        className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
+                      >
+                        {actionLoading ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                        )}
+                        Confirm Registration
+                      </Button>
+                    )}
                 </div>
               </div>
             </div>

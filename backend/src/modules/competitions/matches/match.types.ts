@@ -47,3 +47,35 @@ export interface MatchPlayerInput {
   team: MatchTeam;
   position: number;
 }
+
+// ==================================================
+// MATCH
+// ==================================================
+
+export interface Match {
+  id: number;
+
+  competition_session_id: number;
+
+  court_id: number | null;
+
+  court_assigned_at: Date | null;
+
+  match_number: number;
+
+  status: MatchStatus;
+
+  team_a_score: number | null;
+
+  team_b_score: number | null;
+
+  started_at: Date | null;
+
+  completed_at: Date | null;
+
+  created_at: Date;
+
+  updated_at: Date;
+
+  players?: MatchPlayerInput[];
+}

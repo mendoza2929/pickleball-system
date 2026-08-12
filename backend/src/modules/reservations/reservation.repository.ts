@@ -12,27 +12,19 @@ export class ReservationRepository {
   async generateReservationNumber(
     reservationId: number
   ) {
-
-    const date =
-      new Date();
+    const date = new Date();
 
     return (
       `RSV-` +
       `${date.getFullYear()}` +
-      `${String(
-        date.getMonth() + 1
-      ).padStart(2, "0")}` +
-      `${String(
-        date.getDate()
-      ).padStart(2, "0")}-` +
-      `${String(
-        reservationId
-      ).padStart(6, "0")}`
+      `${String(date.getMonth() + 1).padStart(2, "0")}` +
+      `${String(date.getDate()).padStart(2, "0")}-` +
+      `${String(reservationId).padStart(6, "0")}`
     );
   }
 
   // =====================================================
-  // CHECK TIME CONFLICT
+  // CHECK NORMAL RESERVATION TIME CONFLICT
   // =====================================================
 
   async checkTimeConflict(
@@ -42,7 +34,6 @@ export class ReservationRepository {
     startTime: string,
     endTime: string
   ) {
-
     const [rows]: any =
       await connection.query(
         `
@@ -56,6 +47,72 @@ export class ReservationRepository {
           )
           AND start_time < ?
           AND end_time > ?
+        LIMIT 1
+        `,
+        [
+          courtId,
+          reservationDate,
+          endTime,
+          startTime,
+        ]
+      );
+
+    return rows[0] ?? null;
+  }
+
+  // =====================================================
+  // CHECK COMPETITION COURT ALLOCATION CONFLICT
+  //
+  // Blocks normal reservations/walk-ins when the court
+  // has been allocated to a competition/open play.
+  //
+  // Example:
+  //
+  // competition allocation:
+  // 15:00 - 17:00
+  //
+  // blocked:
+  // 15:00 - 16:00
+  // 16:00 - 17:00
+  // 14:30 - 15:30
+  // 16:30 - 17:30
+  //
+  // allowed:
+  // 09:00 - 10:00
+  // 17:00 - 18:00
+  // =====================================================
+
+  async checkCompetitionCourtAllocationConflict(
+    connection: PoolConnection,
+    courtId: number,
+    reservationDate: string,
+    startTime: string,
+    endTime: string
+  ) {
+    const [rows]: any =
+      await connection.query(
+        `
+        SELECT
+          id,
+          competition_id,
+          competition_division_id,
+          court_id,
+          allocation_date,
+          start_time,
+          end_time,
+          allocation_type,
+          status
+        FROM competition_court_allocations
+        WHERE court_id = ?
+          AND allocation_date = ?
+
+          -- Released allocations should no longer block
+          AND status != 'released'
+
+          -- Standard overlapping-time condition
+          AND start_time < ?
+          AND end_time > ?
+
         LIMIT 1
         `,
         [
@@ -96,7 +153,6 @@ export class ReservationRepository {
     reservation_status: string;
     payment_status: string;
   }) {
-
     const connection =
       await pool.getConnection();
 
@@ -131,10 +187,10 @@ export class ReservationRepository {
       }
 
       // ===================================================
-      // CHECK TIME CONFLICT
+      // CHECK NORMAL RESERVATION CONFLICT
       // ===================================================
 
-      const conflict =
+      const reservationConflict =
         await this.checkTimeConflict(
           connection,
           data.court_id,
@@ -143,9 +199,28 @@ export class ReservationRepository {
           data.end_time
         );
 
-      if (conflict) {
+      if (reservationConflict) {
         throw new Error(
           "RESERVATION_CONFLICT"
+        );
+      }
+
+      // ===================================================
+      // CHECK COMPETITION COURT ALLOCATION
+      // ===================================================
+
+      const competitionConflict =
+        await this.checkCompetitionCourtAllocationConflict(
+          connection,
+          data.court_id,
+          data.reservation_date,
+          data.start_time,
+          data.end_time
+        );
+
+      if (competitionConflict) {
+        throw new Error(
+          "COMPETITION_COURT_ALLOCATION_CONFLICT"
         );
       }
 
@@ -280,6 +355,7 @@ export class ReservationRepository {
     } finally {
 
       connection.release();
+
     }
   }
 
@@ -290,7 +366,6 @@ export class ReservationRepository {
   async findById(
     id: number
   ) {
-
     const [rows]: any =
       await pool.query(
         `
@@ -378,7 +453,6 @@ export class ReservationRepository {
   async findUserReservations(
     userId: number
   ) {
-
     const [rows]: any =
       await pool.query(
         `
@@ -400,7 +474,6 @@ export class ReservationRepository {
   // =====================================================
 
   async findAll() {
-
     const [rows]: any =
       await pool.query(
         `
@@ -487,7 +560,6 @@ export class ReservationRepository {
   async cancelReservation(
     id: number
   ) {
-
     await pool.query(
       `
       UPDATE reservations
@@ -509,7 +581,6 @@ export class ReservationRepository {
     reservationStatus: string,
     paymentStatus: string
   ) {
-
     await pool.query(
       `
       UPDATE reservations
@@ -537,7 +608,6 @@ export class ReservationRepository {
   async getByUuid(
     uuid: string
   ) {
-
     const [rows]: any =
       await pool.query(
         `
@@ -574,7 +644,6 @@ export class ReservationRepository {
     courtId: number,
     reservationDate: string
   ) {
-
     const [rows]: any =
       await pool.query(
         `

@@ -63,10 +63,6 @@ export async function getDivision(
 export async function createNewDivision(
   data: CreateDivisionInput
 ) {
-  // ----------------------------------------------
-  // Competition
-  // ----------------------------------------------
-
   const competition =
     await findCompetitionById(
       data.competitionId
@@ -78,58 +74,37 @@ export async function createNewDivision(
     );
   }
 
-  // ----------------------------------------------
-  // Name
-  // ----------------------------------------------
-
   if (!data.name?.trim()) {
     throw new Error(
       "Division name is required"
     );
   }
 
-  // ----------------------------------------------
-  // Skill level
-  // ----------------------------------------------
-
   if (
     ![
       "beginner",
       "novice",
       "intermediate",
-    ].includes(
-      data.skillLevel
-    )
+    ].includes(data.skillLevel)
   ) {
     throw new Error(
       "Invalid skill level"
     );
   }
 
-  // ----------------------------------------------
-  // Format
-  // ----------------------------------------------
-
   if (
     ![
       "singles",
       "doubles",
-    ].includes(
-      data.format
-    )
+    ].includes(data.format)
   ) {
     throw new Error(
       "Invalid division format"
     );
   }
 
-  // ----------------------------------------------
-  // Max players
-  // ----------------------------------------------
-
   if (
-    data.maxPlayers !==
-      undefined &&
+    data.maxPlayers !== undefined &&
     data.maxPlayers !== null
   ) {
     if (
@@ -144,23 +119,14 @@ export async function createNewDivision(
     }
   }
 
-  // ----------------------------------------------
-  // Entry fee
-  // ----------------------------------------------
-
   if (
-    data.entryFee !==
-      undefined &&
+    data.entryFee !== undefined &&
     data.entryFee < 0
   ) {
     throw new Error(
       "Entry fee cannot be negative"
     );
   }
-
-  // ----------------------------------------------
-  // Status
-  // ----------------------------------------------
 
   if (
     data.status &&
@@ -169,9 +135,7 @@ export async function createNewDivision(
       "closed",
       "in_progress",
       "completed",
-    ].includes(
-      data.status
-    )
+    ].includes(data.status)
   ) {
     throw new Error(
       "Invalid division status"
@@ -198,10 +162,6 @@ export async function editDivision(
     );
   }
 
-  // ----------------------------------------------
-  // Name
-  // ----------------------------------------------
-
   if (
     data.name !== undefined &&
     !data.name.trim()
@@ -211,50 +171,33 @@ export async function editDivision(
     );
   }
 
-  // ----------------------------------------------
-  // Skill
-  // ----------------------------------------------
-
   if (
     data.skillLevel &&
     ![
       "beginner",
       "novice",
       "intermediate",
-    ].includes(
-      data.skillLevel
-    )
+    ].includes(data.skillLevel)
   ) {
     throw new Error(
       "Invalid skill level"
     );
   }
 
-  // ----------------------------------------------
-  // Format
-  // ----------------------------------------------
-
   if (
     data.format &&
     ![
       "singles",
       "doubles",
-    ].includes(
-      data.format
-    )
+    ].includes(data.format)
   ) {
     throw new Error(
       "Invalid division format"
     );
   }
 
-  // ----------------------------------------------
-  // Max players
-  // ----------------------------------------------
-
   if (
-    data.maxPlayers !==
-      undefined &&
+    data.maxPlayers !== undefined &&
     data.maxPlayers !== null
   ) {
     if (
@@ -269,10 +212,6 @@ export async function editDivision(
     }
   }
 
-  // ----------------------------------------------
-  // Entry fee
-  // ----------------------------------------------
-
   if (
     data.entryFee !== undefined &&
     data.entryFee < 0
@@ -282,10 +221,6 @@ export async function editDivision(
     );
   }
 
-  // ----------------------------------------------
-  // Status
-  // ----------------------------------------------
-
   if (
     data.status &&
     ![
@@ -293,9 +228,7 @@ export async function editDivision(
       "closed",
       "in_progress",
       "completed",
-    ].includes(
-      data.status
-    )
+    ].includes(data.status)
   ) {
     throw new Error(
       "Invalid division status"

@@ -1,4 +1,6 @@
-import { Router } from "express";
+import {
+  Router,
+} from "express";
 
 import {
   getByCompetition,
@@ -7,24 +9,32 @@ import {
   update,
 } from "./division.controller";
 
-import { authenticate } from "../../../middleware/authenticate";
+import {
+  authenticate,
+} from "../../../middleware/authenticate";
 
 const router = Router();
 
 // ==================================================
-// COMPETITION DIVISIONS
+// GET DIVISIONS BY COMPETITION
 // ==================================================
-
+//
 // GET
 // /api/competitions/:competitionId/divisions
+//
 
 router.get(
   "/:competitionId/divisions",
   getByCompetition
 );
 
+// ==================================================
+// GET ONE
+// ==================================================
+//
 // GET
 // /api/competitions/divisions/:id
+//
 
 router.get(
   "/divisions/:id",
@@ -32,8 +42,13 @@ router.get(
   getOne
 );
 
+// ==================================================
+// CREATE
+// ==================================================
+//
 // POST
 // /api/competitions/:competitionId/divisions
+//
 
 router.post(
   "/:competitionId/divisions",
@@ -41,8 +56,13 @@ router.post(
   create
 );
 
+// ==================================================
+// UPDATE
+// ==================================================
+//
 // PATCH
 // /api/competitions/divisions/:id
+//
 
 router.patch(
   "/divisions/:id",

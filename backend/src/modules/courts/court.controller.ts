@@ -81,4 +81,16 @@ export class CourtController {
       message: result.message,
     });
   });
+
+  getAvailable = asyncHandler(
+    async (_req: Request, res: Response) => {
+      const courts =
+        await this.courtService.getAvailableCourts();
+
+      return res.status(200).json({
+        success: true,
+        data: courts,
+      });
+    }
+  );
 }

@@ -23,7 +23,6 @@ import { CourtScheduleRepository } from "../court-schedules/courtSchedule.reposi
 import { getDayOfWeek } from "../../shared/utils/date";
 import { timeToMinutes } from "../../shared/utils/time";
 
-
 export class ReservationService {
 
   private reservationRepository =
@@ -37,7 +36,6 @@ export class ReservationService {
 
   private courtScheduleRepository =
     new CourtScheduleRepository();
-
 
   // =====================================================
   // CREATE ONLINE RESERVATION
@@ -53,9 +51,9 @@ export class ReservationService {
     }
   ) {
 
-    // =====================================================
+    // ===================================================
     // FIND COURT
-    // =====================================================
+    // ===================================================
 
     const court =
       await this.courtRepository.findById(
@@ -68,10 +66,9 @@ export class ReservationService {
       );
     }
 
-
-    // =====================================================
+    // ===================================================
     // CUSTOMER VALIDATION
-    // =====================================================
+    // ===================================================
 
     if (
       !data.guest_name ||
@@ -82,10 +79,9 @@ export class ReservationService {
       );
     }
 
-
-    // =====================================================
+    // ===================================================
     // COURT STATUS
-    // =====================================================
+    // ===================================================
 
     if (
       court.status !==
@@ -96,10 +92,9 @@ export class ReservationService {
       );
     }
 
-
-    // =====================================================
+    // ===================================================
     // COURT SCHEDULE
-    // =====================================================
+    // ===================================================
 
     const day =
       getDayOfWeek(
@@ -125,10 +120,9 @@ export class ReservationService {
       );
     }
 
-
-    // =====================================================
+    // ===================================================
     // CALCULATE HOURS
-    // =====================================================
+    // ===================================================
 
     const totalHours =
       calculateHours(
@@ -148,10 +142,9 @@ export class ReservationService {
       );
     }
 
-
-    // =====================================================
+    // ===================================================
     // OPERATING HOURS
-    // =====================================================
+    // ===================================================
 
     const startMinutes =
       timeToMinutes(
@@ -173,7 +166,6 @@ export class ReservationService {
         schedule.close_time
       );
 
-
     if (startMinutes < openMinutes) {
       throw new BadRequestError(
         `Court opens at ${schedule.open_time}`
@@ -186,10 +178,9 @@ export class ReservationService {
       );
     }
 
-
-    // =====================================================
+    // ===================================================
     // PAYMENT
-    // =====================================================
+    // ===================================================
 
     const hourlyRate =
       Number(court.hourly_rate);
@@ -197,10 +188,9 @@ export class ReservationService {
     const totalAmount =
       hourlyRate * totalHours;
 
-
-    // =====================================================
+    // ===================================================
     // FIND OR CREATE CUSTOMER
-    // =====================================================
+    // ===================================================
 
     let customerId: number | null = null;
 
@@ -210,10 +200,9 @@ export class ReservationService {
     const phone =
       data.guest_phone?.trim() || null;
 
-
-    // -----------------------------------------------------
+    // ===================================================
     // FIND BY EMAIL
-    // -----------------------------------------------------
+    // ===================================================
 
     if (email) {
 
@@ -228,10 +217,9 @@ export class ReservationService {
       }
     }
 
-
-    // -----------------------------------------------------
+    // ===================================================
     // FIND BY PHONE
-    // -----------------------------------------------------
+    // =====================================================
 
     if (!customerId && phone) {
 
@@ -246,10 +234,9 @@ export class ReservationService {
       }
     }
 
-
-    // -----------------------------------------------------
+    // ===================================================
     // CREATE CUSTOMER
-    // -----------------------------------------------------
+    // =====================================================
 
     if (!customerId) {
 
@@ -265,7 +252,6 @@ export class ReservationService {
       const lastName =
         parts.join(" ") || "";
 
-
       const customer =
         await this.customerRepository.create({
           first_name: firstName,
@@ -275,22 +261,19 @@ export class ReservationService {
           status: "Active",
         });
 
-
       if (!customer) {
         throw new BadRequestError(
           "Failed to create customer."
         );
       }
 
-
       customerId =
         customer.id;
     }
 
-
-    // =====================================================
+    // ===================================================
     // CREATE RESERVATION
-    // =====================================================
+    // ===================================================
 
     try {
 
@@ -346,10 +329,13 @@ export class ReservationService {
               PAYMENT_STATUS.UNPAID,
           });
 
-
       return reservation;
 
     } catch (error: any) {
+
+      // =================================================
+      // NORMAL RESERVATION CONFLICT
+      // =================================================
 
       if (
         error.message ===
@@ -360,21 +346,44 @@ export class ReservationService {
         );
       }
 
+      // =================================================
+      // COMPETITION / OPEN PLAY CONFLICT
+      // =================================================
+
+      if (
+        error.message ===
+        "COMPETITION_COURT_ALLOCATION_CONFLICT"
+      ) {
+        throw new ConflictError(
+          "This court is reserved for a competition or Open Play during this time."
+        );
+      }
+
+      // =================================================
+      // COURT NOT FOUND
+      // =================================================
+
+      if (
+        error.message ===
+        "COURT_NOT_FOUND"
+      ) {
+        throw new NotFoundError(
+          "Court not found."
+        );
+      }
+
       throw error;
     }
   }
-
 
   // =====================================================
   // GET ALL
   // =====================================================
 
   async getAll() {
-
     return await this.reservationRepository
       .findAll();
   }
-
 
   // =====================================================
   // GET BY ID
@@ -396,16 +405,13 @@ export class ReservationService {
       );
     }
 
-
     const isAdmin =
       roleName === "Owner" ||
       roleName === "Admin";
 
-
     if (isAdmin) {
       return reservation;
     }
-
 
     if (
       reservation.user_id !==
@@ -416,10 +422,8 @@ export class ReservationService {
       );
     }
 
-
     return reservation;
   }
-
 
   // =====================================================
   // MY RESERVATIONS
@@ -428,13 +432,11 @@ export class ReservationService {
   async getMyReservations(
     userId: number
   ) {
-
     return await this.reservationRepository
       .findUserReservations(
         userId
       );
   }
-
 
   // =====================================================
   // CANCEL
@@ -455,7 +457,6 @@ export class ReservationService {
       );
     }
 
-
     if (
       reservation.user_id !==
       userId
@@ -464,7 +465,6 @@ export class ReservationService {
         "Reservation not found."
       );
     }
-
 
     if (
       reservation.reservation_status ===
@@ -475,11 +475,9 @@ export class ReservationService {
       );
     }
 
-
     return await this.reservationRepository
       .cancelReservation(id);
   }
-
 
   // =====================================================
   // PUBLIC UUID LOOKUP
@@ -498,7 +496,6 @@ export class ReservationService {
         "Reservation not found."
       );
     }
-
 
     return {
       uuid:
@@ -527,7 +524,6 @@ export class ReservationService {
     };
   }
 
-
   // =====================================================
   // UPDATE STATUS
   // =====================================================
@@ -550,14 +546,12 @@ export class ReservationService {
       );
     }
 
-
     const validReservationStatuses = [
       RESERVATION_STATUS.PENDING,
       RESERVATION_STATUS.CONFIRMED,
       RESERVATION_STATUS.CANCELLED,
       RESERVATION_STATUS.COMPLETED,
     ];
-
 
     if (
       !validReservationStatuses.includes(
@@ -569,13 +563,11 @@ export class ReservationService {
       );
     }
 
-
     const validPaymentStatuses = [
       PAYMENT_STATUS.UNPAID,
       PAYMENT_STATUS.PARTIAL,
       PAYMENT_STATUS.PAID,
     ];
-
 
     if (
       !validPaymentStatuses.includes(
@@ -586,7 +578,6 @@ export class ReservationService {
         "Invalid payment status."
       );
     }
-
 
     return await this.reservationRepository
       .updateStatus(
@@ -603,7 +594,6 @@ export class ReservationService {
 async createWalkIn(
   data: CreateWalkInReservationInput
 ) {
-
   // ===================================================
   // FIND CUSTOMER
   // ===================================================
@@ -620,11 +610,20 @@ async createWalkIn(
   }
 
   // ===================================================
+  // CUSTOMER NAME
+  // ===================================================
+
+  const guestName =
+    [
+      customer.first_name,
+      customer.last_name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+  // ===================================================
   // BUILD RESERVATION DATA
-  //
-  // Make sure optional values become strings
-  // because CreateReservationInput currently
-  // expects guest_email / guest_phone as strings.
   // ===================================================
 
   const reservationData = {
@@ -634,21 +633,16 @@ async createWalkIn(
       customer.id,
 
     guest_name:
-      data.guest_name ??
-      `${customer.first_name} ${customer.last_name}`,
+      guestName,
 
     guest_email:
-      data.guest_email ??
-      customer.email ??
-      "",
+      customer.email?.trim() || "",
 
     guest_phone:
-      data.guest_phone ??
-      customer.phone ??
-      "",
+      customer.phone?.trim() || "",
 
     remarks:
-      data.remarks ?? "",
+      data.remarks?.trim() || "",
   };
 
   // ===================================================

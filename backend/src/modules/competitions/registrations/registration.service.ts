@@ -1,7 +1,7 @@
 import db from "../../../config/database";
 
 import {
-  countActiveRegistrations,
+  countConfirmedRegistrations,
   createRegistration,
   findRegistration,
   findRegistrationById,
@@ -34,12 +34,13 @@ import {
 // VALID STATUSES
 // ==================================================
 
-const VALID_STATUSES: RegistrationStatus[] = [
-  "pending",
-  "confirmed",
-  "waitlisted",
-  "cancelled",
-];
+const VALID_STATUSES:
+  RegistrationStatus[] = [
+    "pending",
+    "confirmed",
+    "waitlisted",
+    "cancelled",
+  ];
 
 // ==================================================
 // VALID SKILL LEVELS
@@ -167,7 +168,8 @@ export async function registerPlayer(
 
   if (existing) {
     if (
-      existing.status === "cancelled"
+      existing.status ===
+      "cancelled"
     ) {
       throw new Error(
         "Player already has a cancelled registration for this division"
@@ -181,19 +183,21 @@ export async function registerPlayer(
 
   // ----------------------------------------------
   // 9. Capacity
+  //
+  // ONLY CONFIRMED COUNTS
   // ----------------------------------------------
 
   if (
     division.max_players !== null &&
     division.max_players !== undefined
   ) {
-    const registeredCount =
-      await countActiveRegistrations(
+    const confirmedCount =
+      await countConfirmedRegistrations(
         competitionDivisionId
       );
 
     if (
-      registeredCount >=
+      confirmedCount >=
       Number(division.max_players)
     ) {
       throw new Error(
@@ -219,13 +223,19 @@ export async function registerPlayer(
 export async function registerPublicPlayer(
   data: {
     divisionId: number;
+
     firstName: string;
+
     lastName: string;
+
     email: string;
+
     phone?: string | null;
+
     skillLevel: string;
 
     paymentMethod: "GCASH";
+
     paymentProofUrl: string;
   }
 ) {
@@ -248,7 +258,8 @@ export async function registerPublicPlayer(
   // ----------------------------------------------
 
   if (
-    data.paymentMethod !== "GCASH"
+    data.paymentMethod !==
+    "GCASH"
   ) {
     throw new Error(
       "Only GCash payment is supported"
@@ -338,19 +349,21 @@ export async function registerPublicPlayer(
 
   // ----------------------------------------------
   // 9. Check division capacity
+  //
+  // ONLY CONFIRMED COUNTS
   // ----------------------------------------------
 
   if (
     division.max_players !== null &&
     division.max_players !== undefined
   ) {
-    const registeredCount =
-      await countActiveRegistrations(
+    const confirmedCount =
+      await countConfirmedRegistrations(
         data.divisionId
       );
 
     if (
-      registeredCount >=
+      confirmedCount >=
       Number(division.max_players)
     ) {
       throw new Error(
@@ -375,21 +388,21 @@ export async function registerPublicPlayer(
   const [customerRows] =
     await db.execute(
       `
-      SELECT
-        id,
-        uuid,
-        customer_no,
-        first_name,
-        last_name,
-        email,
-        phone,
-        status
+        SELECT
+          id,
+          uuid,
+          customer_no,
+          first_name,
+          last_name,
+          email,
+          phone,
+          status
 
-      FROM customers
+        FROM customers
 
-      WHERE LOWER(email) = ?
+        WHERE LOWER(email) = ?
 
-      LIMIT 1
+        LIMIT 1
       `,
       [email]
     );
@@ -412,25 +425,25 @@ export async function registerPublicPlayer(
     const [result]: any =
       await db.execute(
         `
-        INSERT INTO customers (
-          uuid,
-          customer_no,
-          first_name,
-          last_name,
-          email,
-          phone,
-          status
-        )
+          INSERT INTO customers (
+            uuid,
+            customer_no,
+            first_name,
+            last_name,
+            email,
+            phone,
+            status
+          )
 
-        VALUES (
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          'Active'
-        )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'Active'
+          )
         `,
         [
           customerUuid,
@@ -445,21 +458,21 @@ export async function registerPublicPlayer(
     const [newCustomerRows] =
       await db.execute(
         `
-        SELECT
-          id,
-          uuid,
-          customer_no,
-          first_name,
-          last_name,
-          email,
-          phone,
-          status
+          SELECT
+            id,
+            uuid,
+            customer_no,
+            first_name,
+            last_name,
+            email,
+            phone,
+            status
 
-        FROM customers
+          FROM customers
 
-        WHERE id = ?
+          WHERE id = ?
 
-        LIMIT 1
+          LIMIT 1
         `,
         [result.insertId]
       );
@@ -546,7 +559,8 @@ export async function registerPublicPlayer(
 
   if (existing) {
     if (
-      existing.status === "cancelled"
+      existing.status ===
+      "cancelled"
     ) {
       throw new Error(
         "You already registered for this division before and cancelled that registration"
@@ -607,6 +621,7 @@ export async function registerPublicPlayer(
 
     competition: {
       id: competition.id,
+
       name: competition.name,
     },
 
@@ -628,7 +643,8 @@ export async function registerPublicPlayer(
     },
 
     payment: {
-      method: data.paymentMethod,
+      method:
+        data.paymentMethod,
 
       amount:
         Number(
@@ -745,90 +761,91 @@ export async function updateRegistration(
   // Confirm registration
   // ----------------------------------------------
 
- // ----------------------------------------------
-// Confirm registration
-// ----------------------------------------------
-
-if (
-  data.status === "confirmed"
-) {
-  // --------------------------------------------
-  // Payment proof required
-  // --------------------------------------------
-
   if (
-    !registration.payment_proof_url
+    data.status === "confirmed"
   ) {
-    throw new Error(
-      "Cannot confirm registration without payment proof"
-    );
-  }
+    // --------------------------------------------
+    // Payment proof required
+    // --------------------------------------------
 
-  // --------------------------------------------
-  // Payment must be verified
-  // --------------------------------------------
+    if (
+      !registration.payment_proof_url
+    ) {
+      throw new Error(
+        "Cannot confirm registration without payment proof"
+      );
+    }
 
-  if (
-    registration.payment_status !==
-    "confirmed"
-  ) {
-    throw new Error(
-      "Payment must be verified before confirming registration"
-    );
-  }
+    // --------------------------------------------
+    // Payment must be verified
+    // --------------------------------------------
 
-  // --------------------------------------------
-  // Division
-  // --------------------------------------------
+    if (
+      registration.payment_status !==
+      "confirmed"
+    ) {
+      throw new Error(
+        "Payment must be verified before confirming registration"
+      );
+    }
 
-  const division =
-    await findDivisionById(
-      registration.competition_division_id
-    );
+    // --------------------------------------------
+    // Division
+    // --------------------------------------------
 
-  if (!division) {
-    throw new Error(
-      "Competition division not found"
-    );
-  }
-
-  // --------------------------------------------
-  // Division must be open
-  // --------------------------------------------
-
-  if (
-    division.status !== "open"
-  ) {
-    throw new Error(
-      "This division is not open"
-    );
-  }
-
-  // --------------------------------------------
-  // Capacity
-  // --------------------------------------------
-
-  if (
-    division.max_players !== null &&
-    division.max_players !== undefined
-  ) {
-    const total =
-      await countActiveRegistrations(
+    const division =
+      await findDivisionById(
         registration.competition_division_id
       );
 
-    if (
-      registration.status !==
-        "confirmed" &&
-      total >=
-        Number(division.max_players)
-    ) {
+    if (!division) {
       throw new Error(
-        "This division is already full"
+        "Competition division not found"
       );
     }
+
+    // --------------------------------------------
+    // Division must be open
+    // --------------------------------------------
+
+    if (
+      division.status !== "open"
+    ) {
+      throw new Error(
+        "This division is not open"
+      );
+    }
+
+    // --------------------------------------------
+    // Capacity
+    //
+    // ONLY CONFIRMED COUNTS
+    //
+    // The current registration is normally
+    // pending, so it is not included yet.
+    // --------------------------------------------
+
+    if (
+      division.max_players !== null &&
+      division.max_players !== undefined
+    ) {
+      const confirmedCount =
+        await countConfirmedRegistrations(
+          registration.competition_division_id
+        );
+
+      if (
+        registration.status !==
+          "confirmed" &&
+        confirmedCount >=
+          Number(division.max_players)
+      ) {
+        throw new Error(
+          "This division is already full"
+        );
+      }
+    }
   }
-}
 
   // ----------------------------------------------
   // Update
@@ -908,11 +925,11 @@ export async function verifyRegistrationPayment(
   // 4. Prevent changing confirmed payment
   // ----------------------------------------------
 
-  if (
-    registration.payment_status ===
-      "confirmed" &&
-    paymentStatus !== "confirmed"
-  ) {
+    if (
+      registration.payment_status ===
+        "confirmed" &&
+      paymentStatus !== "confirmed"
+    ) {
     throw new Error(
       "Confirmed payment cannot be changed"
     );

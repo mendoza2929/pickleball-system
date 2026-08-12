@@ -7,7 +7,12 @@ import {
   update,
 } from "./competition.controller";
 
-import { authenticate } from "../../middleware/authenticate";
+import {
+  authenticate,
+} from "../../middleware/authenticate";
+
+import courtAllocationRoutes from "./court-allocations/courtAllocation.routes";
+
 const router = Router();
 
 // ==================================================
@@ -35,6 +40,16 @@ router.patch(
   "/:id",
   authenticate,
   update
+);
+
+// ==================================================
+// COURT ALLOCATIONS
+// ==================================================
+
+router.use(
+  "/:competitionId/court-allocations",
+  authenticate,
+  courtAllocationRoutes
 );
 
 export default router;

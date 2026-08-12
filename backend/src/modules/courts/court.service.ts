@@ -94,4 +94,8 @@ export class CourtService {
       message: "Court deleted successfully.",
     };
   }
+
+  async getAvailableCourts() {
+    return await this.courtRepository.findAvailableCourts();
+  }
 }

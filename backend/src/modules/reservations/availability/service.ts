@@ -6,10 +6,18 @@ import { CourtScheduleRepository } from "../../court-schedules/courtSchedule.rep
 
 import pool from "../../../config/database";
 
+// =====================================================
+// TYPES
+// =====================================================
+
 export interface AvailableSlot {
   start_time: string;
   end_time: string;
 }
+
+// =====================================================
+// RESERVATION AVAILABILITY SERVICE
+// =====================================================
 
 export class ReservationAvailabilityService {
   private courtRepository =
@@ -17,6 +25,10 @@ export class ReservationAvailabilityService {
 
   private courtScheduleRepository =
     new CourtScheduleRepository();
+
+  // =====================================================
+  // GET AVAILABILITY
+  // =====================================================
 
   async getAvailability(
     courtId: number,
@@ -74,7 +86,11 @@ export class ReservationAvailabilityService {
       `${reservationDate}T00:00:00`
     );
 
-    if (Number.isNaN(date.getTime())) {
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
       throw new BadRequestError(
         "Invalid reservation date."
       );
@@ -96,25 +112,36 @@ export class ReservationAvailabilityService {
     // =====================================================
     // COURT STATUS
     // =====================================================
-    //
-    // Maintenance / Inactive courts cannot be reserved.
-    //
 
-    if (court.status !== "Available") {
+    if (
+      court.status !== "Available"
+    ) {
       return {
         court_id: courtId,
-        court_name: court.name,
+
+        court_name:
+          court.name,
+
         reservation_date:
           reservationDate,
-        day_of_week: dayOfWeek,
+
+        day_of_week:
+          dayOfWeek,
+
         duration_hours:
           durationHours,
+
         is_closed: true,
+
         open_time: null,
+
         close_time: null,
+
         available_slots: [],
+
         schedule_source:
           "court_status",
+
         reason:
           court.status ===
           "Maintenance"
@@ -126,47 +153,33 @@ export class ReservationAvailabilityService {
     // =====================================================
     // GET DATE OVERRIDE
     // =====================================================
-    //
-    // Priority:
-    //
-    // 1. Court-specific override
-    // 2. Global holiday
-    //
-    // Example:
-    //
-    // court_id = 7
-    // date = 2026-08-20
-    //
-    // takes priority over:
-    //
-    // court_id = NULL
-    // date = 2026-08-20
-    //
 
-    const [overrideRows]: any =
+    const [
+      overrideRows,
+    ]: any =
       await pool.query(
         `
-        SELECT
-          cso.id,
-          cso.court_id,
-          cso.schedule_date,
-          cso.open_time,
-          cso.close_time,
-          cso.is_closed,
-          cso.reason
-        FROM court_schedule_overrides cso
-        WHERE DATE(cso.schedule_date) = ?
-          AND (
-            cso.court_id = ?
-            OR cso.court_id IS NULL
-          )
-        ORDER BY
-          CASE
-            WHEN cso.court_id = ? THEN 1
-            WHEN cso.court_id IS NULL THEN 2
-            ELSE 3
-          END
-        LIMIT 1
+          SELECT
+            cso.id,
+            cso.court_id,
+            cso.schedule_date,
+            cso.open_time,
+            cso.close_time,
+            cso.is_closed,
+            cso.reason
+          FROM court_schedule_overrides cso
+          WHERE DATE(cso.schedule_date) = ?
+            AND (
+              cso.court_id = ?
+              OR cso.court_id IS NULL
+            )
+          ORDER BY
+            CASE
+              WHEN cso.court_id = ? THEN 1
+              WHEN cso.court_id IS NULL THEN 2
+              ELSE 3
+            END
+          LIMIT 1
         `,
         [
           reservationDate,
@@ -183,7 +196,9 @@ export class ReservationAvailabilityService {
     // =====================================================
 
     let openTime: string | null;
+
     let closeTime: string | null;
+
     let isClosed: boolean;
 
     let scheduleSource:
@@ -193,7 +208,7 @@ export class ReservationAvailabilityService {
     let reason: string | null;
 
     // =====================================================
-    // DATE OVERRIDE EXISTS
+    // DATE OVERRIDE
     // =====================================================
 
     if (override) {
@@ -216,8 +231,7 @@ export class ReservationAvailabilityService {
     }
 
     // =====================================================
-    // NO OVERRIDE
-    // USE WEEKLY SCHEDULE
+    // WEEKLY SCHEDULE
     // =====================================================
 
     else {
@@ -228,25 +242,33 @@ export class ReservationAvailabilityService {
             dayOfWeek
           );
 
-      // ===================================================
-      // NO WEEKLY SCHEDULE
-      // ===================================================
-
       if (!schedule) {
         return {
           court_id: courtId,
-          court_name: court.name,
+
+          court_name:
+            court.name,
+
           reservation_date:
             reservationDate,
-          day_of_week: dayOfWeek,
+
+          day_of_week:
+            dayOfWeek,
+
           duration_hours:
             durationHours,
+
           is_closed: true,
+
           open_time: null,
+
           close_time: null,
+
           available_slots: [],
+
           schedule_source:
             "weekly",
+
           reason:
             "Court has no operating schedule.",
         };
@@ -276,27 +298,42 @@ export class ReservationAvailabilityService {
     if (isClosed) {
       return {
         court_id: courtId,
-        court_name: court.name,
+
+        court_name:
+          court.name,
+
         reservation_date:
           reservationDate,
-        day_of_week: dayOfWeek,
+
+        day_of_week:
+          dayOfWeek,
+
         duration_hours:
           durationHours,
+
         is_closed: true,
+
         open_time: null,
+
         close_time: null,
+
         available_slots: [],
+
         schedule_source:
           scheduleSource,
+
         reason,
       };
     }
 
     // =====================================================
-    // VALIDATE OPENING HOURS
+    // VALIDATE OPERATING HOURS
     // =====================================================
 
-    if (!openTime || !closeTime) {
+    if (
+      !openTime ||
+      !closeTime
+    ) {
       throw new BadRequestError(
         "Court schedule has invalid operating hours."
       );
@@ -335,14 +372,12 @@ export class ReservationAvailabilityService {
         totalMinutes % 60;
 
       return (
-        `${String(hours).padStart(
-          2,
-          "0"
-        )}:` +
-        `${String(minutes).padStart(
-          2,
-          "0"
-        )}`
+        `${String(
+          hours
+        ).padStart(2, "0")}:` +
+        `${String(
+          minutes
+        ).padStart(2, "0")}`
       );
     };
 
@@ -364,7 +399,7 @@ export class ReservationAvailabilityService {
       durationHours * 60;
 
     // =====================================================
-    // INVALID SCHEDULE PROTECTION
+    // INVALID SCHEDULE
     // =====================================================
 
     if (
@@ -378,25 +413,114 @@ export class ReservationAvailabilityService {
 
     // =====================================================
     // GET EXISTING RESERVATIONS
+    //
+    // Pending + Confirmed block the court.
+    //
+    // Cancelled + Completed do NOT block.
+    //
+    // DATE() makes this work whether
+    // reservation_date is DATE or DATETIME.
+    //
+    // LOWER(TRIM()) makes status comparison
+    // case/space insensitive.
     // =====================================================
 
-    const [rows]: any =
+    const [
+      reservationRows,
+    ]: any =
       await pool.query(
         `
-        SELECT
-          start_time,
-          end_time
-        FROM reservations
-        WHERE court_id = ?
-          AND reservation_date = ?
-          AND reservation_status IN ('Pending', 'Confirmed')
-        ORDER BY start_time ASC
+          SELECT
+            id,
+            court_id,
+            reservation_date,
+            start_time,
+            end_time,
+            reservation_status
+          FROM reservations
+          WHERE court_id = ?
+            AND DATE(reservation_date) = ?
+            AND LOWER(
+              TRIM(reservation_status)
+            ) IN (
+              'pending',
+              'confirmed'
+            )
+          ORDER BY start_time ASC
         `,
         [
           courtId,
           reservationDate,
         ]
       );
+
+    console.log(
+      "[ReservationAvailability] Existing reservations:",
+      {
+        courtId,
+        reservationDate,
+        reservations:
+          reservationRows,
+      }
+    );
+
+    // =====================================================
+    // GET COURT ALLOCATIONS
+    //
+    // IMPORTANT:
+    //
+    // Any allocation that is NOT released
+    // blocks the court.
+    //
+    // Example:
+    //
+    // 15:00 - 17:00
+    //
+    // blocks:
+    //
+    // 15:00 - 16:00
+    // 16:00 - 17:00
+    //
+    // Released allocations are ignored.
+    // =====================================================
+
+    const [
+      competitionAllocations,
+    ]: any =
+      await pool.query(
+        `
+          SELECT
+            id,
+            competition_id,
+            competition_division_id,
+            court_id,
+            allocation_date,
+            start_time,
+            end_time,
+            allocation_type,
+            status
+          FROM competition_court_allocations
+          WHERE court_id = ?
+            AND DATE(allocation_date) = ?
+            AND LOWER(
+              TRIM(status)
+            ) <> 'released'
+          ORDER BY start_time ASC
+        `,
+        [
+          courtId,
+          reservationDate,
+        ]
+      );
+
+    console.log(
+      "[ReservationAvailability] Court allocations:",
+      {
+        courtId,
+        reservationDate,
+        competitionAllocations,
+      }
+    );
 
     // =====================================================
     // CURRENT TIME
@@ -431,7 +555,7 @@ export class ReservationAvailabilityService {
 
       startMinutes +
         durationMinutes <=
-        closeMinutes;
+      closeMinutes;
 
       startMinutes += 60
     ) {
@@ -440,7 +564,7 @@ export class ReservationAvailabilityService {
         durationMinutes;
 
       // ===================================================
-      // DO NOT SHOW PAST TIMES FOR TODAY
+      // DO NOT SHOW PAST TIMES TODAY
       // ===================================================
 
       if (
@@ -454,41 +578,172 @@ export class ReservationAvailabilityService {
 
       // ===================================================
       // CHECK RESERVATION CONFLICT
+      //
+      // Example:
+      //
+      // Existing:
+      // 09:00 - 10:00
+      //
+      // Requested:
+      // 09:00 - 10:00
+      //
+      // Conflict = TRUE
+      //
+      // Therefore slot is removed.
       // ===================================================
 
-      const hasConflict =
-        rows.some(
+      const hasReservationConflict =
+        reservationRows.some(
           (
             reservation: any
           ) => {
             const existingStart =
               timeToMinutes(
-                reservation.start_time
+                String(
+                  reservation.start_time
+                )
               );
 
             const existingEnd =
               timeToMinutes(
-                reservation.end_time
+                String(
+                  reservation.end_time
+                )
               );
 
-            /*
-             * Overlap:
-             *
-             * new start < existing end
-             * &&
-             * new end > existing start
-             */
-
-            return (
+            const conflict =
               startMinutes <
                 existingEnd &&
               endMinutes >
-                existingStart
-            );
+                existingStart;
+
+            if (conflict) {
+              console.log(
+                "[ReservationAvailability] BLOCKED BY RESERVATION",
+                {
+                  courtId,
+                  reservationDate,
+
+                  requestedSlot:
+                    `${minutesToTime(
+                      startMinutes
+                    )} - ${minutesToTime(
+                      endMinutes
+                    )}`,
+
+                  reservation:
+                    `${reservation.start_time} - ${reservation.end_time}`,
+
+                  reservationId:
+                    reservation.id,
+
+                  reservationStatus:
+                    reservation.reservation_status,
+                }
+              );
+            }
+
+            return conflict;
           }
         );
 
-      if (hasConflict) {
+      // ===================================================
+      // CHECK COURT ALLOCATION CONFLICT
+      //
+      // Example:
+      //
+      // Allocation:
+      // 15:00 - 17:00
+      //
+      // Requested:
+      // 15:00 - 16:00
+      //
+      // Conflict = TRUE
+      //
+      // Requested:
+      // 16:00 - 17:00
+      //
+      // Conflict = TRUE
+      // ===================================================
+
+      const hasCompetitionAllocationConflict =
+        competitionAllocations.some(
+          (
+            allocation: any
+          ) => {
+            const allocationStart =
+              timeToMinutes(
+                String(
+                  allocation.start_time
+                )
+              );
+
+            const allocationEnd =
+              timeToMinutes(
+                String(
+                  allocation.end_time
+                )
+              );
+
+            const conflict =
+              startMinutes <
+                allocationEnd &&
+              endMinutes >
+                allocationStart;
+
+            if (conflict) {
+              console.log(
+                "[ReservationAvailability] BLOCKED BY COURT ALLOCATION",
+                {
+                  courtId,
+                  reservationDate,
+
+                  requestedSlot:
+                    `${minutesToTime(
+                      startMinutes
+                    )} - ${minutesToTime(
+                      endMinutes
+                    )}`,
+
+                  allocation:
+                    `${allocation.start_time} - ${allocation.end_time}`,
+
+                  allocationId:
+                    allocation.id,
+
+                  competitionId:
+                    allocation.competition_id,
+
+                  allocationStatus:
+                    allocation.status,
+
+                  allocationType:
+                    allocation.allocation_type,
+                }
+              );
+            }
+
+            return conflict;
+          }
+        );
+
+      // ===================================================
+      // SKIP RESERVED SLOT
+      // ===================================================
+
+      if (
+        hasReservationConflict
+      ) {
+        continue;
+      }
+
+      // ===================================================
+      // SKIP COURT ALLOCATION
+      // ===================================================
+
+      if (
+        hasCompetitionAllocationConflict
+      ) {
         continue;
       }
 
@@ -512,6 +767,16 @@ export class ReservationAvailabilityService {
     // =====================================================
     // RESPONSE
     // =====================================================
+
+    console.log(
+      "[ReservationAvailability] Final available slots:",
+      {
+        courtId,
+        reservationDate,
+        durationHours,
+        availableSlots,
+      }
+    );
 
     return {
       court_id: courtId,

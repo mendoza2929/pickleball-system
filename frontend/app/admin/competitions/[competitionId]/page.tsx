@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+
 import {
   ArrowLeft,
   Plus,
@@ -14,15 +15,25 @@ import {
 } from "lucide-react";
 
 import { competitionService } from "@/services/competitions/competition.service";
+
 import {
   divisionService,
   CompetitionDivision,
 } from "@/services/competitions/division.service";
+import { courtAllocationService } from "@/services/competitions/court-allocation.service";
+// ==================================================
+// TYPES
+// ==================================================
 
 interface Competition {
   id: number;
+
   name: string;
-  type: "open_play" | "tournament";
+
+  type:
+    | "open_play"
+    | "tournament";
+
   status:
     | "draft"
     | "published"
@@ -31,25 +42,102 @@ interface Competition {
     | "in_progress"
     | "completed"
     | "cancelled";
+
   start_at: string;
+
   end_at: string | null;
+
   description: string | null;
 }
 
+interface CourtAllocation {
+  id: number;
+
+  competition_id: number;
+
+  competition_division_id:
+    | number
+    | null;
+
+  court_id: number;
+
+  allocation_date: string;
+
+  start_time: string;
+
+  end_time: string;
+
+  allocation_type: string;
+
+  // The API service currently returns status as a string.
+  // Keep this page type compatible with the service response.
+  status: string;
+
+  court_number?: number;
+
+  court_name?: string;
+}
+
+// ==================================================
+// PAGE
+// ==================================================
+
 export default function CompetitionDetailsPage() {
   const params = useParams();
+
   const router = useRouter();
 
-  const competitionId = Number(params.competitionId);
+  // ==================================================
+  // COMPETITION ID
+  // ==================================================
 
-  const [competition, setCompetition] =
-    useState<Competition | null>(null);
+  const competitionId =
+    Number(params.competitionId);
 
-  const [divisions, setDivisions] =
-    useState<CompetitionDivision[]>([]);
+  // ==================================================
+  // API URL
+  // ==================================================
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "";
+
+  // ==================================================
+  // STATE
+  // ==================================================
+
+  const [
+    competition,
+    setCompetition,
+  ] = useState<Competition | null>(
+    null
+  );
+
+  const [
+    divisions,
+    setDivisions,
+  ] = useState<CompetitionDivision[]>(
+    []
+  );
+
+  const [
+    hasCourtAllocation,
+    setHasCourtAllocation,
+  ] = useState(false);
+
+  const [
+    allocationLoading,
+    setAllocationLoading,
+  ] = useState(true);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    error,
+    setError,
+  ] = useState("");
 
   // ==================================================
   // LOAD DATA
@@ -57,21 +145,36 @@ export default function CompetitionDetailsPage() {
 
   useEffect(() => {
     if (
-      !Number.isInteger(competitionId) ||
+      !Number.isInteger(
+        competitionId
+      ) ||
       competitionId <= 0
     ) {
-      setError("Invalid competition ID");
+      setError(
+        "Invalid competition ID."
+      );
+
       setLoading(false);
+
       return;
     }
 
     loadData();
   }, [competitionId]);
 
+  // ==================================================
+  // LOAD COMPETITION DATA
+  // ==================================================
+
   async function loadData() {
     try {
       setLoading(true);
+
       setError("");
+
+      // -----------------------------------------------
+      // Competition + Divisions
+      // -----------------------------------------------
 
       const [
         competitionData,
@@ -80,13 +183,25 @@ export default function CompetitionDetailsPage() {
         competitionService.getById(
           competitionId
         ),
+
         divisionService.getByCompetition(
           competitionId
         ),
       ]);
 
-      setCompetition(competitionData);
-      setDivisions(divisionData);
+      setCompetition(
+        competitionData
+      );
+
+      setDivisions(
+        divisionData
+      );
+
+      // -----------------------------------------------
+      // Court Allocation
+      // -----------------------------------------------
+
+      await checkCourtAllocation();
     } catch (error: any) {
       console.error(
         "Failed to load competition:",
@@ -95,7 +210,7 @@ export default function CompetitionDetailsPage() {
 
       setError(
         error?.response?.data?.message ||
-          "Failed to load competition"
+          "Failed to load competition."
       );
     } finally {
       setLoading(false);
@@ -103,7 +218,106 @@ export default function CompetitionDetailsPage() {
   }
 
   // ==================================================
-  // FORMATTERS
+  // CHECK COURT ALLOCATION
+  // ==================================================
+
+ async function checkCourtAllocation() {
+  try {
+    setAllocationLoading(true);
+
+    const result =
+      await courtAllocationService.getByCompetition(
+        competitionId
+      );
+
+    console.log(
+      "[Court Allocation] API response:",
+      result
+    );
+
+    // ==================================================
+    // GET ALLOCATIONS
+    // ==================================================
+
+    let allocations: CourtAllocation[] = [];
+
+    if (Array.isArray(result)) {
+      allocations = result;
+    } else if (
+      Array.isArray(result?.data)
+    ) {
+      allocations = result.data;
+    }
+
+    console.log(
+      "[Court Allocation] Allocations:",
+      allocations
+    );
+
+    // ==================================================
+    // ONLY RESERVED COUNTS
+    // ==================================================
+
+    const hasReservedAllocation =
+      allocations.some(
+        (allocation) =>
+          String(
+            allocation.status
+          ).toLowerCase() ===
+          "reserved"
+      );
+
+    console.log(
+      "[Court Allocation] Has reserved allocation:",
+      hasReservedAllocation
+    );
+
+    setHasCourtAllocation(
+      hasReservedAllocation
+    );
+  } catch (error) {
+    console.error(
+      "[Court Allocation] Failed:",
+      error
+    );
+
+    setHasCourtAllocation(false);
+  } finally {
+    setAllocationLoading(false);
+  }
+}
+  // ==================================================
+  // HANDLE OPEN PLAY
+  // ==================================================
+
+  function handleOpenPlay(
+    divisionId: number
+  ) {
+    // ==================================================
+    // NO COURT ALLOCATION
+    // ==================================================
+
+    if (
+      !hasCourtAllocation
+    ) {
+      router.push(
+        `/admin/competitions/${competitionId}/court-allocation`
+      );
+
+      return;
+    }
+
+    // ==================================================
+    // COURT ALLOCATION EXISTS
+    // ==================================================
+
+    router.push(
+      `/admin/competitions/${competitionId}/divisions/${divisionId}/open-play`
+    );
+  }
+
+  // ==================================================
+  // FORMAT DATE
   // ==================================================
 
   function formatDate(
@@ -113,17 +327,27 @@ export default function CompetitionDetailsPage() {
       return "—";
     }
 
-    return new Date(value).toLocaleString(
+    return new Date(
+      value
+    ).toLocaleString(
       "en-US",
       {
         month: "short",
+
         day: "numeric",
+
         year: "numeric",
+
         hour: "numeric",
+
         minute: "2-digit",
       }
     );
   }
+
+  // ==================================================
+  // FORMAT CURRENCY
+  // ==================================================
 
   function formatCurrency(
     value: number
@@ -132,14 +356,16 @@ export default function CompetitionDetailsPage() {
       "en-PH",
       {
         style: "currency",
+
         currency: "PHP",
+
         maximumFractionDigits: 0,
       }
     ).format(value);
   }
 
   // ==================================================
-  // STATUS
+  // COMPETITION STATUS
   // ==================================================
 
   function competitionStatusClass(
@@ -169,6 +395,10 @@ export default function CompetitionDetailsPage() {
     }
   }
 
+  // ==================================================
+  // DIVISION STATUS
+  // ==================================================
+
   function divisionStatusClass(
     status: string
   ) {
@@ -197,6 +427,7 @@ export default function CompetitionDetailsPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-50 text-slate-900">
+
         <div className="mx-auto max-w-7xl px-6 py-8">
 
           <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
@@ -204,12 +435,17 @@ export default function CompetitionDetailsPage() {
           <div className="mt-6 h-10 w-80 animate-pulse rounded bg-slate-200" />
 
           <div className="mt-8 grid gap-5 md:grid-cols-3">
+
             <div className="h-36 animate-pulse rounded-xl bg-white shadow-sm" />
+
             <div className="h-36 animate-pulse rounded-xl bg-white shadow-sm" />
+
             <div className="h-36 animate-pulse rounded-xl bg-white shadow-sm" />
+
           </div>
 
         </div>
+
       </main>
     );
   }
@@ -218,9 +454,13 @@ export default function CompetitionDetailsPage() {
   // ERROR
   // ==================================================
 
-  if (error || !competition) {
+  if (
+    error ||
+    !competition
+  ) {
     return (
       <main className="min-h-screen bg-slate-50 text-slate-900">
+
         <div className="mx-auto max-w-7xl px-6 py-8">
 
           <button
@@ -238,6 +478,7 @@ export default function CompetitionDetailsPage() {
           </button>
 
           <div className="mt-6 rounded-xl border border-red-200 bg-white p-6 shadow-sm">
+
             <div className="text-sm font-semibold text-red-700">
               Unable to load competition
             </div>
@@ -246,9 +487,11 @@ export default function CompetitionDetailsPage() {
               {error ||
                 "Competition not found."}
             </p>
+
           </div>
 
         </div>
+
       </main>
     );
   }
@@ -316,13 +559,17 @@ export default function CompetitionDetailsPage() {
 
             {competition.description && (
               <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                {competition.description}
+                {
+                  competition.description
+                }
               </p>
             )}
 
           </div>
 
-          {/* ADD DIVISION */}
+          {/* ==========================================
+              ADD DIVISION
+          ========================================== */}
 
           <button
             type="button"
@@ -353,6 +600,7 @@ export default function CompetitionDetailsPage() {
             <div className="flex items-start justify-between">
 
               <div>
+
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Competition Type
                 </p>
@@ -363,10 +611,13 @@ export default function CompetitionDetailsPage() {
                     " "
                   )}
                 </p>
+
               </div>
 
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
+
                 <Trophy className="h-5 w-5 text-blue-600" />
+
               </div>
 
             </div>
@@ -380,6 +631,7 @@ export default function CompetitionDetailsPage() {
             <div className="flex items-start justify-between">
 
               <div>
+
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Schedule
                 </p>
@@ -398,10 +650,13 @@ export default function CompetitionDetailsPage() {
                     )}
                   </p>
                 )}
+
               </div>
 
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50">
+
                 <CalendarDays className="h-5 w-5 text-violet-600" />
+
               </div>
 
             </div>
@@ -415,21 +670,27 @@ export default function CompetitionDetailsPage() {
             <div className="flex items-start justify-between">
 
               <div>
+
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Divisions
                 </p>
 
                 <p className="mt-2 text-2xl font-bold text-slate-950">
-                  {divisions.length}
+                  {
+                    divisions.length
+                  }
                 </p>
 
                 <p className="mt-1 text-xs text-slate-500">
                   Configured divisions
                 </p>
+
               </div>
 
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
+
                 <Users className="h-5 w-5 text-emerald-600" />
+
               </div>
 
             </div>
@@ -439,7 +700,7 @@ export default function CompetitionDetailsPage() {
         </div>
 
         {/* ============================================
-            DIVISIONS HEADER
+            DIVISIONS
         ============================================ */}
 
         <div className="mt-10">
@@ -447,6 +708,7 @@ export default function CompetitionDetailsPage() {
           <div className="mb-5 flex items-end justify-between">
 
             <div>
+
               <h2 className="text-xl font-bold text-slate-950">
                 Divisions
               </h2>
@@ -454,12 +716,16 @@ export default function CompetitionDetailsPage() {
               <p className="mt-1 text-sm text-slate-500">
                 Configure player groups for this competition.
               </p>
+
             </div>
 
             {divisions.length > 0 && (
               <span className="text-sm font-medium text-slate-500">
-                {divisions.length}{" "}
-                {divisions.length === 1
+                {
+                  divisions.length
+                }{" "}
+                {divisions.length ===
+                1
                   ? "division"
                   : "divisions"}
               </span>
@@ -471,11 +737,15 @@ export default function CompetitionDetailsPage() {
               EMPTY
           ========================================== */}
 
-          {divisions.length === 0 ? (
+          {divisions.length ===
+          0 ? (
+
             <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
 
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+
                 <Trophy className="h-6 w-6 text-slate-500" />
+
               </div>
 
               <h3 className="mt-5 text-base font-bold text-slate-950">
@@ -502,6 +772,7 @@ export default function CompetitionDetailsPage() {
               </button>
 
             </div>
+
           ) : (
 
             /* ==========================================
@@ -511,10 +782,14 @@ export default function CompetitionDetailsPage() {
             <div className="grid gap-5 lg:grid-cols-2">
 
               {divisions.map(
-                (division) => (
+                (
+                  division
+                ) => (
 
                   <div
-                    key={division.id}
+                    key={
+                      division.id
+                    }
                     className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow-md"
                   >
 
@@ -527,7 +802,9 @@ export default function CompetitionDetailsPage() {
                         <div className="flex flex-wrap items-center gap-2">
 
                           <h3 className="text-lg font-bold text-slate-950">
-                            {division.name}
+                            {
+                              division.name
+                            }
                           </h3>
 
                           <span
@@ -546,7 +823,9 @@ export default function CompetitionDetailsPage() {
                         <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-sm text-slate-500">
 
                           <span className="capitalize">
-                            {division.skill_level}
+                            {
+                              division.skill_level
+                            }
                           </span>
 
                           <span>
@@ -554,7 +833,9 @@ export default function CompetitionDetailsPage() {
                           </span>
 
                           <span className="capitalize">
-                            {division.format}
+                            {
+                              division.format
+                            }
                           </span>
 
                         </div>
@@ -585,14 +866,18 @@ export default function CompetitionDetailsPage() {
                       <div className="rounded-lg bg-slate-50 p-4">
 
                         <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+
                           <Users className="h-4 w-4" />
 
                           Capacity
+
                         </div>
 
                         <p className="mt-2 text-base font-bold text-slate-950">
-                          {division.max_players ??
-                            "Unlimited"}
+                          {
+                            division.max_players ??
+                            "Unlimited"
+                          }
                         </p>
 
                       </div>
@@ -600,40 +885,61 @@ export default function CompetitionDetailsPage() {
                       <div className="rounded-lg bg-slate-50 p-4">
 
                         <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+
                           <Wallet className="h-4 w-4" />
 
                           Entry Fee
+
                         </div>
 
                         <p className="mt-2 text-base font-bold text-slate-950">
+
                           {formatCurrency(
                             Number(
                               division.entry_fee
                             )
                           )}
+
                         </p>
 
                       </div>
 
                     </div>
 
-                    {/* OPEN PLAY */}
+                    {/* =================================
+                        OPEN PLAY
+                    ================================= */}
 
                     {competition.type ===
                       "open_play" && (
+
                       <button
                         type="button"
+                        disabled={
+                          allocationLoading
+                        }
                         onClick={() =>
-                          router.push(
-                            `/admin/competitions/${competitionId}/divisions/${division.id}/open-play`
+                          handleOpenPlay(
+                            division.id
                           )
                         }
-                        className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 text-sm font-semibold text-white transition hover:bg-blue-700"
+                        className={`mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold text-white transition ${
+                          allocationLoading
+                            ? "cursor-wait bg-slate-400"
+                            : "bg-blue-600 hover:bg-blue-700"
+                        }`}
                       >
+
                         <Play className="h-4 w-4" />
 
-                        Manage Open Play
+                        {allocationLoading
+                          ? "Checking Courts..."
+                          : hasCourtAllocation
+                          ? "Manage Open Play"
+                          : "Allocate Courts"}
+
                       </button>
+
                     )}
 
                   </div>

@@ -145,16 +145,14 @@ export async function create(
         format,
 
         maxPlayers:
-          maxPlayers !==
-          undefined &&
+          maxPlayers !== undefined &&
           maxPlayers !== null &&
           maxPlayers !== ""
             ? Number(maxPlayers)
             : null,
 
         entryFee:
-          entryFee !==
-            undefined &&
+          entryFee !== undefined &&
           entryFee !== ""
             ? Number(entryFee)
             : 0,

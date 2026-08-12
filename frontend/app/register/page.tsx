@@ -21,7 +21,9 @@ type Competition = {
 
   name: string;
 
-  type: "open_play" | "tournament";
+  type:
+    | "open_play"
+    | "tournament";
 
   status:
     | "draft"
@@ -36,12 +38,29 @@ type Competition = {
 
   end_at: string | null;
 
-  registration_start_at: string | null;
+  registration_start_at:
+    | string
+    | null;
 
-  registration_end_at: string | null;
+  registration_end_at:
+    | string
+    | null;
 
   description: string | null;
 };
+
+// =====================================================
+// IMPORTANT
+//
+// checked_in_players is the number that actually
+// consumes the division capacity.
+//
+// pending registration       = does NOT count
+// confirmed registration     = does NOT count
+// checked_in                 = COUNTS
+// no_show                    = does NOT count
+// cancelled                  = does NOT count
+// =====================================================
 
 type Division = {
   id: number;
@@ -60,6 +79,10 @@ type Division = {
     | "doubles";
 
   max_players: number | null;
+
+  checked_in_players: number;
+
+  remaining_slots: number | null;
 
   entry_fee: number;
 
@@ -101,7 +124,8 @@ export default function RegisterPage() {
   // STEP
   // ===================================================
 
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] =
+    useState<Step>(1);
 
   // ===================================================
   // COMPETITIONS
@@ -225,7 +249,8 @@ export default function RegisterPage() {
         const available =
           response.data.data.filter(
             (competition) =>
-              competition.type === "open_play" &&
+              competition.type ===
+                "open_play" &&
               (
                 competition.status ===
                   "registration_open" ||
@@ -234,7 +259,9 @@ export default function RegisterPage() {
               )
           );
 
-        setCompetitions(available);
+        setCompetitions(
+          available
+        );
       } catch (error: any) {
         console.error(
           "Failed to load competitions:",
@@ -242,13 +269,16 @@ export default function RegisterPage() {
         );
 
         setError(
-          error?.response?.data?.message ||
+          error?.response?.data
+            ?.message ||
             "Unable to load available competitions."
         );
 
         setCompetitions([]);
       } finally {
-        setLoadingCompetitions(false);
+        setLoadingCompetitions(
+          false
+        );
       }
     }
 
@@ -257,10 +287,27 @@ export default function RegisterPage() {
 
   // =====================================================
   // LOAD DIVISIONS
+  //
+  // IMPORTANT:
+  //
+  // We use the selected competitionId.
+  //
+  // We DO NOT use:
+  //
+  // useParams()
+  //
+  // Therefore this will never intentionally
+  // generate:
+  //
+  // /competitions/NaN/divisions
   // =====================================================
 
   useEffect(() => {
     async function loadDivisions() {
+      // -----------------------------------------------
+      // No competition selected
+      // -----------------------------------------------
+
       if (!competitionId) {
         setDivisions([]);
 
@@ -269,27 +316,108 @@ export default function RegisterPage() {
         return;
       }
 
+      // -----------------------------------------------
+      // Convert selected dropdown value to number
+      // -----------------------------------------------
+
+      const parsedCompetitionId =
+        Number(competitionId);
+
+      // -----------------------------------------------
+      // Validate competition ID
+      // -----------------------------------------------
+
+      if (
+        !Number.isInteger(
+          parsedCompetitionId
+        ) ||
+        parsedCompetitionId <= 0
+      ) {
+        console.error(
+          "Invalid competition ID:",
+          competitionId
+        );
+
+        setDivisions([]);
+
+        setDivisionId("");
+
+        setError(
+          "Invalid competition selected."
+        );
+
+        return;
+      }
+
       try {
-        setLoadingDivisions(true);
+        setLoadingDivisions(
+          true
+        );
 
         setError("");
 
         setDivisionId("");
 
+        // ---------------------------------------------
+        // REQUEST
+        // ---------------------------------------------
+
+        const url =
+          `/competitions/${parsedCompetitionId}/divisions`;
+
+        console.log(
+          "Loading divisions:",
+          url
+        );
+
         const response =
           await api.get<
             ApiResponse<Division[]>
-          >(
-            `/competitions/${competitionId}/divisions`
-          );
+          >(url);
+
+        const data =
+          response.data.data ?? [];
+
+        // ---------------------------------------------
+        // ONLY SHOW DIVISIONS THAT HAVE SLOTS
+        //
+        // remaining_slots comes from backend
+        // based on checked-in players.
+        // ---------------------------------------------
 
         const available =
-          response.data.data.filter(
-            (division) =>
-              division.status === "open"
+          data.filter(
+            (division) => {
+              // Division must be open
+              if (
+                division.status !==
+                "open"
+              ) {
+                return false;
+              }
+
+              // Unlimited capacity
+              if (
+                division.max_players ===
+                null
+              ) {
+                return true;
+              }
+
+              // Only show if there is
+              // at least one slot left
+              return (
+                Number(
+                  division.remaining_slots ??
+                    0
+                ) > 0
+              );
+            }
           );
 
-        setDivisions(available);
+        setDivisions(
+          available
+        );
       } catch (error: any) {
         console.error(
           "Failed to load divisions:",
@@ -297,13 +425,16 @@ export default function RegisterPage() {
         );
 
         setError(
-          error?.response?.data?.message ||
+          error?.response?.data
+            ?.message ||
             "Unable to load divisions."
         );
 
         setDivisions([]);
       } finally {
-        setLoadingDivisions(false);
+        setLoadingDivisions(
+          false
+        );
       }
     }
 
@@ -322,7 +453,9 @@ export default function RegisterPage() {
         );
       }
     };
-  }, [paymentProofPreview]);
+  }, [
+    paymentProofPreview,
+  ]);
 
   // =====================================================
   // SELECTED COMPETITION
@@ -333,8 +466,9 @@ export default function RegisterPage() {
       () =>
         competitions.find(
           (competition) =>
-            String(competition.id) ===
-            competitionId
+            String(
+              competition.id
+            ) === competitionId
         ),
       [
         competitions,
@@ -351,8 +485,9 @@ export default function RegisterPage() {
       () =>
         divisions.find(
           (division) =>
-            String(division.id) ===
-            divisionId
+            String(
+              division.id
+            ) === divisionId
         ),
       [
         divisions,
@@ -453,7 +588,11 @@ export default function RegisterPage() {
     // Validate image
     // ---------------------------------------------------
 
-    if (!file.type.startsWith("image/")) {
+    if (
+      !file.type.startsWith(
+        "image/"
+      )
+    ) {
       setError(
         "Please upload a GCash payment screenshot."
       );
@@ -494,10 +633,14 @@ export default function RegisterPage() {
     // Set payment proof
     // ---------------------------------------------------
 
-    setPaymentProof(file);
+    setPaymentProof(
+      file
+    );
 
     const previewUrl =
-      URL.createObjectURL(file);
+      URL.createObjectURL(
+        file
+      );
 
     setPaymentProofPreview(
       previewUrl
@@ -505,10 +648,84 @@ export default function RegisterPage() {
   }
 
   // =====================================================
+  // REFRESH DIVISIONS
+  //
+  // Used before final registration.
+  //
+  // This protects against another player checking in
+  // while this page is open.
+  // =====================================================
+
+  async function refreshDivisionCapacity() {
+    if (!competitionId) {
+      return null;
+    }
+
+    const parsedCompetitionId =
+      Number(competitionId);
+
+    if (
+      !Number.isInteger(
+        parsedCompetitionId
+      ) ||
+      parsedCompetitionId <= 0
+    ) {
+      return null;
+    }
+
+    const response =
+      await api.get<
+        ApiResponse<Division[]>
+      >(
+        `/competitions/${parsedCompetitionId}/divisions`
+      );
+
+    const data =
+      response.data.data ?? [];
+
+    const available =
+      data.filter(
+        (division) => {
+          if (
+            division.status !==
+            "open"
+          ) {
+            return false;
+          }
+
+          if (
+            division.max_players ===
+            null
+          ) {
+            return true;
+          }
+
+          return (
+            Number(
+              division.remaining_slots ??
+                0
+            ) > 0
+          );
+        }
+      );
+
+    setDivisions(
+      available
+    );
+
+    return data.find(
+      (division) =>
+        String(
+          division.id
+        ) === divisionId
+    ) ?? null;
+  }
+
+  // =====================================================
   // CONTINUE
   // =====================================================
 
-  function handleContinue() {
+  async function handleContinue() {
     setError("");
 
     setSuccess("");
@@ -545,6 +762,68 @@ export default function RegisterPage() {
       if (!selectedDivision) {
         setError(
           "Selected division was not found."
+        );
+
+        return;
+      }
+
+      // -------------------------------------------------
+      // Refresh capacity before payment
+      // -------------------------------------------------
+
+      try {
+        const latestDivision =
+          await refreshDivisionCapacity();
+
+        if (!latestDivision) {
+          setError(
+            "Selected division is no longer available."
+          );
+
+          setDivisionId("");
+
+          return;
+        }
+
+        if (
+          latestDivision.status !==
+          "open"
+        ) {
+          setError(
+            "This division is no longer open for registration."
+          );
+
+          setDivisionId("");
+
+          return;
+        }
+
+        if (
+          latestDivision.max_players !==
+          null &&
+          Number(
+            latestDivision.remaining_slots ??
+              0
+          ) <= 0
+        ) {
+          setError(
+            "This division is now full. Please select another division."
+          );
+
+          setDivisionId("");
+
+          return;
+        }
+      } catch (error: any) {
+        console.error(
+          "Failed to refresh division capacity:",
+          error
+        );
+
+        setError(
+          error?.response?.data
+            ?.message ||
+            "Unable to verify division availability."
         );
 
         return;
@@ -610,6 +889,38 @@ export default function RegisterPage() {
     setSuccess("");
 
     // ===================================================
+    // VALIDATE COMPETITION
+    // ===================================================
+
+    if (!competitionId) {
+      setError(
+        "Please select a competition."
+      );
+
+      setStep(1);
+
+      return;
+    }
+
+    const parsedCompetitionId =
+      Number(competitionId);
+
+    if (
+      !Number.isInteger(
+        parsedCompetitionId
+      ) ||
+      parsedCompetitionId <= 0
+    ) {
+      setError(
+        "Invalid competition selected."
+      );
+
+      setStep(1);
+
+      return;
+    }
+
+    // ===================================================
     // VALIDATE DIVISION
     // ===================================================
 
@@ -618,12 +929,84 @@ export default function RegisterPage() {
         "Please select a division."
       );
 
+      setStep(1);
+
       return;
     }
 
     if (!selectedDivision) {
       setError(
         "Selected division was not found."
+      );
+
+      setStep(1);
+
+      return;
+    }
+
+    // ===================================================
+    // REFRESH CAPACITY BEFORE SUBMIT
+    // ===================================================
+
+    try {
+      const latestDivision =
+        await refreshDivisionCapacity();
+
+      if (!latestDivision) {
+        setError(
+          "This division is no longer available."
+        );
+
+        setStep(1);
+
+        setDivisionId("");
+
+        return;
+      }
+
+      if (
+        latestDivision.status !==
+        "open"
+      ) {
+        setError(
+          "This division is no longer open for registration."
+        );
+
+        setStep(1);
+
+        setDivisionId("");
+
+        return;
+      }
+
+      if (
+        latestDivision.max_players !==
+        null &&
+        Number(
+          latestDivision.remaining_slots ??
+            0
+        ) <= 0
+      ) {
+        setError(
+          "This division is now full. Please select another division."
+        );
+
+        setStep(1);
+
+        setDivisionId("");
+
+        return;
+      }
+    } catch (error: any) {
+      console.error(
+        "Failed to verify division capacity:",
+        error
+      );
+
+      setError(
+        error?.response?.data
+          ?.message ||
+          "Unable to verify division availability."
       );
 
       return;
@@ -741,7 +1124,7 @@ export default function RegisterPage() {
       );
 
       // -------------------------------------------------
-      // Register player + payment proof
+      // Register player
       // -------------------------------------------------
 
       const response =
@@ -758,7 +1141,7 @@ export default function RegisterPage() {
       );
 
       // -------------------------------------------------
-      // Success message
+      // Success
       // -------------------------------------------------
 
       setSuccess(
@@ -782,7 +1165,9 @@ export default function RegisterPage() {
       // Clear payment proof
       // -------------------------------------------------
 
-      setPaymentProof(null);
+      setPaymentProof(
+        null
+      );
 
       if (paymentProofPreview) {
         URL.revokeObjectURL(
@@ -790,7 +1175,9 @@ export default function RegisterPage() {
         );
       }
 
-      setPaymentProofPreview(null);
+      setPaymentProofPreview(
+        null
+      );
 
     } catch (error: any) {
       console.error(
@@ -799,11 +1186,14 @@ export default function RegisterPage() {
       );
 
       setError(
-        error?.response?.data?.message ||
+        error?.response?.data
+          ?.message ||
           "Unable to complete registration."
       );
     } finally {
-      setRegistering(false);
+      setRegistering(
+        false
+      );
     }
   }
 
@@ -832,8 +1222,6 @@ export default function RegisterPage() {
           "
         >
 
-          {/* LOGO */}
-
           <Link
             href="/"
             className="
@@ -844,8 +1232,6 @@ export default function RegisterPage() {
           >
             Rivers Pickleball
           </Link>
-
-          {/* BACK */}
 
           <Link
             href="/"
@@ -1070,10 +1456,7 @@ export default function RegisterPage() {
               "
             >
 
-              {/* TITLE */}
-
               <div>
-
                 <h2
                   className="
                     text-lg
@@ -1094,7 +1477,6 @@ export default function RegisterPage() {
                   and division you want
                   to join.
                 </p>
-
               </div>
 
               {/* =================================================
@@ -1116,7 +1498,6 @@ export default function RegisterPage() {
                 </label>
 
                 {loadingCompetitions ? (
-
                   <div
                     className="
                       rounded-xl
@@ -1131,9 +1512,7 @@ export default function RegisterPage() {
                   >
                     Loading competitions...
                   </div>
-
                 ) : competitions.length === 0 ? (
-
                   <div
                     className="
                       rounded-xl
@@ -1150,31 +1529,40 @@ export default function RegisterPage() {
                     are currently available
                     for registration.
                   </div>
-
                 ) : (
-
                   <select
                     value={competitionId}
                     onChange={(event) => {
+                      const value =
+                        event.target.value;
+
                       setCompetitionId(
-                        event.target.value
+                        value
                       );
+
+                      setDivisionId("");
 
                       setError("");
 
                       setSuccess("");
 
-                      // Reset payment when
-                      // competition changes
-                      setPaymentProof(null);
+                      setStep(1);
 
-                      if (paymentProofPreview) {
+                      setPaymentProof(
+                        null
+                      );
+
+                      if (
+                        paymentProofPreview
+                      ) {
                         URL.revokeObjectURL(
                           paymentProofPreview
                         );
                       }
 
-                      setPaymentProofPreview(null);
+                      setPaymentProofPreview(
+                        null
+                      );
                     }}
                     className="
                       w-full
@@ -1201,9 +1589,13 @@ export default function RegisterPage() {
                     {competitions.map(
                       (competition) => (
                         <option
-                          key={competition.id}
-                          value={
+                          key={
                             competition.id
+                          }
+                          value={
+                            String(
+                              competition.id
+                            )
                           }
                         >
                           {competition.name}
@@ -1212,7 +1604,6 @@ export default function RegisterPage() {
                     )}
 
                   </select>
-
                 )}
 
               </div>
@@ -1239,7 +1630,9 @@ export default function RegisterPage() {
                       text-white
                     "
                   >
-                    {selectedCompetition.name}
+                    {
+                      selectedCompetition.name
+                    }
                   </p>
 
                   <p
@@ -1296,7 +1689,6 @@ export default function RegisterPage() {
                 </label>
 
                 {!competitionId ? (
-
                   <div
                     className="
                       rounded-xl
@@ -1313,9 +1705,7 @@ export default function RegisterPage() {
                     Select a competition
                     first.
                   </div>
-
                 ) : loadingDivisions ? (
-
                   <div
                     className="
                       rounded-xl
@@ -1330,9 +1720,7 @@ export default function RegisterPage() {
                   >
                     Loading divisions...
                   </div>
-
                 ) : divisions.length === 0 ? (
-
                   <div
                     className="
                       rounded-xl
@@ -1349,9 +1737,7 @@ export default function RegisterPage() {
                     are currently
                     available.
                   </div>
-
                 ) : (
-
                   <select
                     value={divisionId}
                     onChange={(event) => {
@@ -1363,17 +1749,21 @@ export default function RegisterPage() {
 
                       setSuccess("");
 
-                      // Reset payment when
-                      // division changes
-                      setPaymentProof(null);
+                      setPaymentProof(
+                        null
+                      );
 
-                      if (paymentProofPreview) {
+                      if (
+                        paymentProofPreview
+                      ) {
                         URL.revokeObjectURL(
                           paymentProofPreview
                         );
                       }
 
-                      setPaymentProofPreview(null);
+                      setPaymentProofPreview(
+                        null
+                      );
                     }}
                     className="
                       w-full
@@ -1400,8 +1790,14 @@ export default function RegisterPage() {
                     {divisions.map(
                       (division) => (
                         <option
-                          key={division.id}
-                          value={division.id}
+                          key={
+                            division.id
+                          }
+                          value={
+                            String(
+                              division.id
+                            )
+                          }
                         >
                           {division.name}
                           {" · "}
@@ -1412,12 +1808,16 @@ export default function RegisterPage() {
                           {formatFormat(
                             division.format
                           )}
+                          {" · "}
+                          {division.max_players ===
+                          null
+                            ? "Unlimited slots"
+                            : `${division.remaining_slots} slots left`}
                         </option>
                       )
                     )}
 
                   </select>
-
                 )}
 
               </div>
@@ -1427,37 +1827,163 @@ export default function RegisterPage() {
               ================================================= */}
 
               {selectedDivision && (
-                <div
-                  className="
-                    mt-4
-                    grid
-                    gap-3
-                    sm:grid-cols-3
-                  "
-                >
+                <>
+                  <div
+                    className="
+                      mt-4
+                      grid
+                      gap-3
+                      sm:grid-cols-2
+                      lg:grid-cols-4
+                    "
+                  >
 
-                  <InfoCard
-                    label="Skill Level"
-                    value={formatSkill(
-                      selectedDivision.skill_level
-                    )}
-                  />
+                    <InfoCard
+                      label="Skill Level"
+                      value={formatSkill(
+                        selectedDivision.skill_level
+                      )}
+                    />
 
-                  <InfoCard
-                    label="Format"
-                    value={formatFormat(
-                      selectedDivision.format
-                    )}
-                  />
+                    <InfoCard
+                      label="Format"
+                      value={formatFormat(
+                        selectedDivision.format
+                      )}
+                    />
 
-                  <InfoCard
-                    label="Entry Fee"
-                    value={`₱${Number(
-                      selectedDivision.entry_fee
-                    ).toFixed(2)}`}
-                  />
+                    <InfoCard
+                      label="Players"
+                      value={
+                        selectedDivision.max_players ===
+                        null
+                          ? `${selectedDivision.checked_in_players} players`
+                          : `${selectedDivision.checked_in_players} / ${selectedDivision.max_players}`
+                      }
+                    />
 
-                </div>
+                    <InfoCard
+                      label="Entry Fee"
+                      value={`₱${Number(
+                        selectedDivision.entry_fee
+                      ).toFixed(2)}`}
+                    />
+
+                  </div>
+
+                  {/* =================================================
+                      SLOT INFORMATION
+                  ================================================= */}
+
+                  {selectedDivision.max_players !==
+                    null && (
+                    <div
+                      className="
+                        mt-4
+                        rounded-xl
+                        border
+                        border-lime-400/20
+                        bg-lime-400/5
+                        p-4
+                      "
+                    >
+
+                      <div
+                        className="
+                          flex
+                          items-center
+                          justify-between
+                        "
+                      >
+
+                        <span
+                          className="
+                            text-sm
+                            text-slate-400
+                          "
+                        >
+                          Available Slots
+                        </span>
+
+                        <span
+                          className={`
+                            text-sm
+                            font-bold
+                            ${
+                              Number(
+                                selectedDivision.remaining_slots
+                              ) <= 3
+                                ? "text-amber-400"
+                                : "text-lime-400"
+                            }
+                          `}
+                        >
+                          {
+                            selectedDivision.remaining_slots
+                          }{" "}
+                          remaining
+                        </span>
+
+                      </div>
+
+                      <div
+                        className="
+                          mt-3
+                          h-2
+                          overflow-hidden
+                          rounded-full
+                          bg-white/10
+                        "
+                      >
+
+                        <div
+                          className="
+                            h-full
+                            rounded-full
+                            bg-lime-400
+                            transition-all
+                          "
+                          style={{
+                            width: `${
+                              selectedDivision.max_players >
+                              0
+                                ? Math.min(
+                                    100,
+                                    (
+                                      selectedDivision.checked_in_players /
+                                      selectedDivision.max_players
+                                    ) *
+                                      100
+                                  )
+                                : 0
+                            }%`,
+                          }}
+                        />
+
+                      </div>
+
+                      <p
+                        className="
+                          mt-2
+                          text-xs
+                          text-slate-500
+                        "
+                      >
+                        {
+                          selectedDivision.checked_in_players
+                        }{" "}
+                        of{" "}
+                        {
+                          selectedDivision.max_players
+                        }{" "}
+                        slots occupied by
+                        checked-in players.
+                      </p>
+
+                    </div>
+                  )}
+
+                </>
               )}
 
               {/* =================================================
@@ -1479,7 +2005,8 @@ export default function RegisterPage() {
                   }
                   disabled={
                     !competitionId ||
-                    !divisionId
+                    !divisionId ||
+                    loadingDivisions
                   }
                   className="
                     rounded-xl
@@ -1530,8 +2057,6 @@ export default function RegisterPage() {
                 sm:p-8
               "
             >
-
-              {/* HEADER */}
 
               <div className="mb-8">
 
@@ -1615,7 +2140,9 @@ export default function RegisterPage() {
                           text-white
                         "
                       >
-                        {selectedDivision.name}
+                        {
+                          selectedDivision.name
+                        }
                       </p>
 
                       <p
@@ -1635,6 +2162,22 @@ export default function RegisterPage() {
                           selectedDivision.format
                         )}
                       </p>
+
+                      {selectedDivision.max_players !==
+                        null && (
+                        <p
+                          className="
+                            mt-2
+                            text-xs
+                            text-lime-400
+                          "
+                        >
+                          {
+                            selectedDivision.remaining_slots
+                          }{" "}
+                          slots remaining
+                        </p>
+                      )}
 
                     </div>
 
@@ -1777,6 +2320,7 @@ export default function RegisterPage() {
                     p-4
                   "
                 >
+
                   <img
                     src="/images/Hero.png"
                     alt="GCash QR Code"
@@ -1786,9 +2330,8 @@ export default function RegisterPage() {
                       object-contain
                     "
                   />
-                </div>
 
-                {/* Amount reminder */}
+                </div>
 
                 <div
                   className="
@@ -1917,7 +2460,9 @@ export default function RegisterPage() {
                     <div className="w-full">
 
                       <img
-                        src={paymentProofPreview}
+                        src={
+                          paymentProofPreview
+                        }
                         alt="GCash payment proof"
                         className="
                           mx-auto
@@ -1935,7 +2480,9 @@ export default function RegisterPage() {
                           text-slate-400
                         "
                       >
-                        {paymentProof?.name}
+                        {
+                          paymentProof?.name
+                        }
                       </p>
 
                       <p
@@ -2157,7 +2704,9 @@ export default function RegisterPage() {
                   onClick={
                     handleContinue
                   }
-                  disabled={!paymentProof}
+                  disabled={
+                    !paymentProof
+                  }
                   className="
                     rounded-xl
                     bg-lime-400
@@ -2308,7 +2857,9 @@ export default function RegisterPage() {
                         text-white
                       "
                     >
-                      {selectedCompetition.name}
+                      {
+                        selectedCompetition.name
+                      }
                     </p>
 
                     <p
@@ -2318,16 +2869,46 @@ export default function RegisterPage() {
                         text-slate-400
                       "
                     >
-                      {selectedDivision.name}
+                      {
+                        selectedDivision.name
+                      }
+
                       {" · "}
+
                       {formatSkill(
                         selectedDivision.skill_level
                       )}
+
                       {" · "}
+
                       {formatFormat(
                         selectedDivision.format
                       )}
                     </p>
+
+                    {selectedDivision.max_players !==
+                      null && (
+                      <p
+                        className="
+                          mt-2
+                          text-xs
+                          text-lime-400
+                        "
+                      >
+                        {
+                          selectedDivision.checked_in_players
+                        }{" "}
+                        /{" "}
+                        {
+                          selectedDivision.max_players
+                        }{" "}
+                        checked in ·{" "}
+                        {
+                          selectedDivision.remaining_slots
+                        }{" "}
+                        remaining
+                      </p>
+                    )}
 
                     <div
                       className="
@@ -2409,9 +2990,7 @@ export default function RegisterPage() {
                 "
               >
 
-                {/* =================================================
-                    NAME
-                ================================================= */}
+                {/* NAME */}
 
                 <div
                   className="
@@ -2441,9 +3020,7 @@ export default function RegisterPage() {
 
                 </div>
 
-                {/* =================================================
-                    CONTACT
-                ================================================= */}
+                {/* CONTACT */}
 
                 <div
                   className="
@@ -2474,9 +3051,7 @@ export default function RegisterPage() {
 
                 </div>
 
-                {/* =================================================
-                    FINAL NOTICE
-                ================================================= */}
+                {/* FINAL NOTICE */}
 
                 <div
                   className="
@@ -2513,9 +3088,7 @@ export default function RegisterPage() {
 
                 </div>
 
-                {/* =================================================
-                    ACTIONS
-                ================================================= */}
+                {/* ACTIONS */}
 
                 <div
                   className="

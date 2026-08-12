@@ -106,7 +106,6 @@ export interface CreateWalkInReservationPayload {
 
   remarks?: string;
 }
-
 // =====================================================
 // UPDATE RESERVATION
 // =====================================================

@@ -73,7 +73,6 @@ export async function addMatchPlayer(
         team,
         position
       )
-
       VALUES (?, ?, ?, ?)
     `,
     [
@@ -369,6 +368,10 @@ export async function startMatch(
 // COMPLETE MATCH
 // --------------------------------------------------
 
+// --------------------------------------------------
+// COMPLETE MATCH
+// --------------------------------------------------
+
 export async function completeMatch(
   id: number,
   teamAScore: number,
@@ -390,7 +393,8 @@ export async function completeMatch(
           SELECT
             id,
             competition_session_id,
-            status
+            status,
+            court_id
 
           FROM competition_matches
 
@@ -425,7 +429,11 @@ export async function completeMatch(
           team_b_score = ?,
 
           completed_at =
-            CURRENT_TIMESTAMP
+            CURRENT_TIMESTAMP,
+
+          -- RELEASE COURT
+          court_id = NULL,
+          court_assigned_at = NULL
 
         WHERE id = ?
       `,
@@ -455,7 +463,8 @@ export async function completeMatch(
 
     // ---------------------------------------------
     // MOVE QUEUE PLAYERS
-    // called/playing → completed
+    //
+    // called/playing -> completed
     // ---------------------------------------------
 
     for (
@@ -493,16 +502,22 @@ export async function completeMatch(
       );
     }
 
+    // ---------------------------------------------
+    // COMMIT
+    // ---------------------------------------------
+
     await connection.commit();
 
     return findMatchById(id);
+
   } catch (error) {
+
     await connection.rollback();
 
     throw error;
+
   } finally {
+
     connection.release();
   }
-
-  
 }

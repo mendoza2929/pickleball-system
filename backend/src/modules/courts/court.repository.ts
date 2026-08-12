@@ -230,4 +230,28 @@ export class CourtRepository {
       [id]
     );
   }
+
+  async findAvailableCourts() {
+    const [rows]: any = await pool.query(
+      `
+      SELECT
+        c.id,
+        c.uuid,
+        c.court_number,
+        c.name,
+        c.description,
+        c.surface_type,
+        c.hourly_rate,
+        c.status
+      FROM courts c
+
+      WHERE c.is_deleted = 0
+        AND c.status = 'Available'
+
+      ORDER BY c.court_number ASC
+      `
+    );
+
+    return rows;
+  }
 }
