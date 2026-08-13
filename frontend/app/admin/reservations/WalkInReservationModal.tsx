@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   CalendarDays,
@@ -42,11 +42,24 @@ interface WalkInReservationModalProps {
 // FORMAT TIME
 // ============================================================
 
+function normalizeTime(value: string) {
+  return value?.slice(0, 5) ?? "";
+}
+
+function timeToMinutes(value: string) {
+  const normalized = normalizeTime(value);
+  const [hour, minute] = normalized
+    .split(":")
+    .map(Number);
+
+  return hour * 60 + minute;
+}
+
 function formatTime(value: string) {
   if (!value) return "";
 
   const [hourString, minuteString] =
-    value.slice(0, 5).split(":");
+    normalizeTime(value).split(":");
 
   const hour = Number(hourString);
   const minute = Number(minuteString);
@@ -115,6 +128,12 @@ export default function WalkInReservationModal({
   const [customerSearch, setCustomerSearch] =
     useState("");
 
+  const [customerDropdownOpen, setCustomerDropdownOpen] =
+    useState(false);
+
+  const customerDropdownRef =
+    useRef<HTMLDivElement>(null);
+
   const [loadingCustomers, setLoadingCustomers] =
     useState(false);
 
@@ -149,8 +168,10 @@ export default function WalkInReservationModal({
   const [availableSlots, setAvailableSlots] =
     useState<AvailableSlot[]>([]);
 
-  const [selectedSlot, setSelectedSlot] =
-    useState<AvailableSlot | null>(null);
+  // Multiple time slots can be selected for a walk-in reservation.
+  // The selected slots must be consecutive.
+  const [selectedSlots, setSelectedSlots] =
+    useState<AvailableSlot[]>([]);
 
   // ==========================================================
   // REMARKS
@@ -285,6 +306,35 @@ export default function WalkInReservationModal({
   ]);
 
   // ==========================================================
+  // ==========================================================
+  // CLOSE CUSTOMER DROPDOWN WHEN CLICKING OUTSIDE
+  // ==========================================================
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        customerDropdownRef.current &&
+        !customerDropdownRef.current.contains(
+          event.target as Node
+        )
+      ) {
+        setCustomerDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
+    };
+  }, []);
+
   // LOAD AVAILABILITY
   // ==========================================================
 
@@ -294,7 +344,7 @@ export default function WalkInReservationModal({
       !reservationDate
     ) {
       setAvailableSlots([]);
-      setSelectedSlot(null);
+      setSelectedSlots([]);
       return;
     }
 
@@ -305,13 +355,13 @@ export default function WalkInReservationModal({
         try {
           setLoadingAvailability(true);
           setError("");
-          setSelectedSlot(null);
+          setSelectedSlots([]);
 
           const result =
             await getReservationAvailability(
               Number(courtId),
               reservationDate,
-              Number(durationHours)
+              1
             );
 
           if (cancelled) {
@@ -355,7 +405,6 @@ export default function WalkInReservationModal({
   }, [
     courtId,
     reservationDate,
-    durationHours,
   ]);
 
   // ==========================================================
@@ -368,6 +417,8 @@ export default function WalkInReservationModal({
     setCustomerId("");
 
     setCustomerSearch("");
+
+    setCustomerDropdownOpen(false);
 
     setShowCreateCustomer(false);
 
@@ -386,7 +437,7 @@ export default function WalkInReservationModal({
 
     setAvailableSlots([]);
 
-    setSelectedSlot(null);
+    setSelectedSlots([]);
 
     setRemarks("");
 
@@ -421,7 +472,7 @@ export default function WalkInReservationModal({
 
     setAvailableSlots([]);
 
-    setSelectedSlot(null);
+    setSelectedSlots([]);
 
     setError("");
   };
@@ -437,7 +488,7 @@ export default function WalkInReservationModal({
 
     setAvailableSlots([]);
 
-    setSelectedSlot(null);
+    setSelectedSlots([]);
 
     setError("");
   };
@@ -449,12 +500,11 @@ export default function WalkInReservationModal({
   const handleDurationChange = (
     value: string
   ) => {
+    // Duration is now calculated from the selected
+    // one-hour time slots. Keep this handler only
+    // for compatibility with existing form state.
     setDurationHours(value);
-
-    setAvailableSlots([]);
-
-    setSelectedSlot(null);
-
+    setSelectedSlots([]);
     setError("");
   };
 
@@ -467,6 +517,8 @@ export default function WalkInReservationModal({
   ) => {
     setCustomerId(value);
 
+    setCustomerDropdownOpen(false);
+
     setError("");
   };
 
@@ -477,11 +529,76 @@ export default function WalkInReservationModal({
   const handleTimeSelect = (
     slot: AvailableSlot
   ) => {
-    if (saving) return;
+    if (saving || creatingCustomer) return;
 
-    setSelectedSlot(slot);
+    const slotStart = timeToMinutes(slot.start_time);
+    const slotEnd = timeToMinutes(slot.end_time);
 
     setError("");
+
+    setSelectedSlots((current) => {
+      const exists = current.some(
+        (item) =>
+          timeToMinutes(item.start_time) ===
+            slotStart &&
+          timeToMinutes(item.end_time) ===
+            slotEnd
+      );
+
+      // Clicking an already-selected slot removes it.
+      if (exists) {
+        return current.filter(
+          (item) =>
+            !(
+              timeToMinutes(item.start_time) ===
+                slotStart &&
+              timeToMinutes(item.end_time) ===
+                slotEnd
+            )
+        );
+      }
+
+      // First slot.
+      if (current.length === 0) {
+        return [slot];
+      }
+
+      const sorted = [...current].sort(
+        (a, b) =>
+          timeToMinutes(a.start_time) -
+          timeToMinutes(b.start_time)
+      );
+
+      const firstStart = timeToMinutes(
+        sorted[0].start_time
+      );
+
+      const lastEnd = timeToMinutes(
+        sorted[sorted.length - 1].end_time
+      );
+
+      // Add only when the new slot directly touches
+      // either end of the current continuous range.
+      const touchesStart =
+        slotEnd === firstStart;
+
+      const touchesEnd =
+        slotStart === lastEnd;
+
+      if (touchesStart || touchesEnd) {
+        return [...current, slot].sort(
+          (a, b) =>
+            timeToMinutes(a.start_time) -
+            timeToMinutes(b.start_time)
+        );
+      }
+
+      setError(
+        "Select consecutive time slots. You cannot skip an unavailable time."
+      );
+
+      return current;
+    });
   };
 
   // ==========================================================
@@ -490,6 +607,8 @@ export default function WalkInReservationModal({
 
   const handleOpenCreateCustomer = () => {
     setError("");
+
+    setCustomerDropdownOpen(false);
 
     const search =
       customerSearch.trim();
@@ -611,6 +730,8 @@ export default function WalkInReservationModal({
 
         setCustomerSearch("");
 
+        setCustomerDropdownOpen(false);
+
         setError("");
       } catch (error: any) {
         console.error(
@@ -627,6 +748,35 @@ export default function WalkInReservationModal({
         setCreatingCustomer(false);
       }
     };
+
+  // ==========================================================
+  // SELECTED TIME RANGE
+  // ==========================================================
+
+  const sortedSelectedSlots = [...selectedSlots].sort(
+    (a, b) =>
+      timeToMinutes(a.start_time) -
+      timeToMinutes(b.start_time)
+  );
+
+  const selectedStartTime =
+    sortedSelectedSlots.length > 0
+      ? normalizeTime(
+          sortedSelectedSlots[0].start_time
+        )
+      : null;
+
+  const selectedEndTime =
+    sortedSelectedSlots.length > 0
+      ? normalizeTime(
+          sortedSelectedSlots[
+            sortedSelectedSlots.length - 1
+          ].end_time
+        )
+      : null;
+
+  const selectedDurationHours =
+    selectedSlots.length;
 
   // ==========================================================
   // SUBMIT RESERVATION
@@ -711,9 +861,13 @@ export default function WalkInReservationModal({
     // TIME
     // --------------------------------------------------------
 
-    if (!selectedSlot) {
+    if (
+      selectedSlots.length === 0 ||
+      !selectedStartTime ||
+      !selectedEndTime
+    ) {
       setError(
-        "Please select an available time."
+        "Please select at least one available time slot."
       );
 
       return;
@@ -733,10 +887,10 @@ export default function WalkInReservationModal({
           reservationDate,
 
         start_time:
-          selectedSlot.start_time,
+          selectedStartTime,
 
         end_time:
-          selectedSlot.end_time,
+          selectedEndTime,
 
         remarks:
           remarks.trim() ||
@@ -990,149 +1144,323 @@ export default function WalkInReservationModal({
 
               {!showCreateCustomer && (
                 <>
-                  {/* SEARCH */}
-                  <div className="relative">
-                    <Search
-                      className="
-                        pointer-events-none
-                        absolute
-                        left-3
-                        top-1/2
-                        h-4
-                        w-4
-                        -translate-y-1/2
-                        text-slate-400
-                      "
-                    />
-
-                    <input
-                      value={customerSearch}
-                      onChange={(event) =>
-                        setCustomerSearch(event.target.value)
-                      }
-                      placeholder="Search customer..."
-                      disabled={saving || creatingCustomer}
-                      className="
-                        h-11
-                        w-full
+                  {/* SEARCH + CUSTOMER DROPDOWN */}
+                  <div
+                    ref={customerDropdownRef}
+                    className="relative"
+                  >
+                    <div
+                      className={`
+                        relative
+                        overflow-hidden
                         rounded-xl
                         border
-                        border-slate-200
                         bg-white
-                        pl-10
-                        pr-4
-                        text-sm
-                        text-slate-900
-                        outline-none
-                        placeholder:text-slate-400
-                        focus:border-[#9bd900]
-                        focus:ring-2
-                        focus:ring-[#b7ff00]/20
-                      "
-                    />
-                  </div>
-
-                  {/* CUSTOMER SELECT */}
-                  <div className="relative mt-2">
-                    <User
-                      className="
-                        pointer-events-none
-                        absolute
-                        left-3
-                        top-1/2
-                        h-4
-                        w-4
-                        -translate-y-1/2
-                        text-slate-400
-                      "
-                    />
-
-                    <select
-                      value={customerId}
-                      onChange={(event) =>
-                        handleCustomerChange(event.target.value)
-                      }
-                      disabled={
-                        saving ||
-                        creatingCustomer ||
-                        loadingCustomers
-                      }
-                      className="
-                        h-11
-                        w-full
-                        appearance-none
-                        rounded-xl
-                        border
-                        border-slate-200
-                        bg-white
-                        pl-10
-                        pr-4
-                        text-sm
-                        text-slate-900
-                        outline-none
-                        focus:border-[#9bd900]
-                        focus:ring-2
-                        focus:ring-[#b7ff00]/20
-                      "
+                        transition-all
+                        ${
+                          customerDropdownOpen
+                            ? "border-[#9bd900] ring-2 ring-[#b7ff00]/20"
+                            : "border-slate-200"
+                        }
+                      `}
                     >
-                      <option value="">
-                        {loadingCustomers
-                          ? "Loading customers..."
-                          : customers.length === 0
-                            ? "No customers found"
-                            : "Select customer"}
-                      </option>
-
-                      {customers.map((customer) => (
-                        <option
-                          key={customer.id}
-                          value={customer.id}
-                        >
-                          {customer.first_name}{" "}
-                          {customer.last_name}
-                          {customer.phone
-                            ? ` — ${customer.phone}`
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* NO CUSTOMER FOUND */}
-                  {!loadingCustomers &&
-                    customers.length === 0 &&
-                    customerSearch.trim() && (
-                      <button
-                        type="button"
-                        onClick={handleOpenCreateCustomer}
-                        disabled={saving || creatingCustomer}
+                      <Search
                         className="
-                          mt-3
-                          flex
+                          pointer-events-none
+                          absolute
+                          left-3
+                          top-1/2
+                          h-4
+                          w-4
+                          -translate-y-1/2
+                          text-slate-400
+                        "
+                      />
+
+                      <input
+                        value={customerSearch}
+                        onChange={(event) => {
+                          const value =
+                            event.target.value;
+
+                          setCustomerSearch(value);
+                          setCustomerDropdownOpen(true);
+
+                          if (customerId) {
+                            const selectedName =
+                              `${selectedCustomer?.first_name ?? ""} ${selectedCustomer?.last_name ?? ""}`.trim();
+
+                            if (
+                              value.trim() !==
+                              selectedName
+                            ) {
+                              setCustomerId("");
+                            }
+                          }
+                        }}
+                        onFocus={() =>
+                          setCustomerDropdownOpen(true)
+                        }
+                        placeholder="Search name or phone number..."
+                        disabled={
+                          saving ||
+                          creatingCustomer
+                        }
+                        className="
+                          h-11
                           w-full
-                          items-center
-                          justify-center
-                          gap-2
+                          bg-transparent
+                          pl-10
+                          pr-10
+                          text-sm
+                          text-slate-900
+                          outline-none
+                          placeholder:text-slate-400
+                        "
+                      />
+
+                      {customerSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerSearch("");
+                            setCustomerId("");
+                            setCustomerDropdownOpen(true);
+                            setError("");
+                          }}
+                          disabled={
+                            saving ||
+                            creatingCustomer
+                          }
+                          className="
+                            absolute
+                            right-2
+                            top-1/2
+                            flex
+                            h-7
+                            w-7
+                            -translate-y-1/2
+                            items-center
+                            justify-center
+                            rounded-lg
+                            text-slate-400
+                            transition
+                            hover:bg-slate-100
+                            hover:text-slate-700
+                          "
+                          aria-label="Clear customer search"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {customerDropdownOpen && (
+                      <div
+                        className="
+                          absolute
+                          left-0
+                          right-0
+                          z-50
+                          mt-2
+                          overflow-hidden
                           rounded-xl
                           border
-                          border-dashed
-                          border-[#9bd900]
-                          bg-[#b7ff00]/10
-                          px-4
-                          py-3
-                          text-sm
-                          font-medium
-                          text-slate-800
-                          transition
-                          hover:bg-[#b7ff00]/20
-                          disabled:cursor-not-allowed
-                          disabled:opacity-50
+                          border-slate-200
+                          bg-white
+                          shadow-xl
+                          shadow-slate-900/10
                         "
                       >
-                        <UserPlus className="h-4 w-4" />
-                        Create "{customerSearch}"
-                      </button>
+                        <div className="max-h-64 overflow-y-auto py-1">
+                          {loadingCustomers ? (
+                            <div
+                              className="
+                                flex
+                                items-center
+                                gap-3
+                                px-4
+                                py-4
+                                text-sm
+                                text-slate-500
+                              "
+                            >
+                              <span
+                                className="
+                                  h-4
+                                  w-4
+                                  animate-spin
+                                  rounded-full
+                                  border-2
+                                  border-slate-200
+                                  border-t-[#9bd900]
+                                "
+                              />
+                              Searching customers...
+                            </div>
+                          ) : customers.length === 0 ? (
+                            <div className="px-4 py-5">
+                              <p className="text-sm font-medium text-slate-700">
+                                No customers found
+                              </p>
+
+                              <p className="mt-1 text-xs text-slate-400">
+                                {customerSearch.trim()
+                                  ? "Try another name or phone number."
+                                  : "Start typing to search for a customer."}
+                              </p>
+                            </div>
+                          ) : (
+                            customers.map((customer) => {
+                              const selected =
+                                customer.id ===
+                                Number(customerId);
+
+                              const initials =
+                                `${customer.first_name?.[0] ?? ""}${customer.last_name?.[0] ?? ""}`
+                                  .toUpperCase();
+
+                              return (
+                                <button
+                                  key={customer.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setCustomerId(
+                                      String(customer.id)
+                                    );
+
+                                    setCustomerSearch(
+                                      `${customer.first_name} ${customer.last_name}`
+                                    );
+
+                                    setCustomerDropdownOpen(
+                                      false
+                                    );
+
+                                    setError("");
+                                  }}
+                                  disabled={
+                                    saving ||
+                                    creatingCustomer
+                                  }
+                                  className={`
+                                    flex
+                                    w-full
+                                    items-center
+                                    gap-3
+                                    px-3
+                                    py-2.5
+                                    text-left
+                                    transition
+                                    ${
+                                      selected
+                                        ? "bg-[#b7ff00]/10"
+                                        : "hover:bg-slate-50"
+                                    }
+                                  `}
+                                >
+                                  <div
+                                    className={`
+                                      flex
+                                      h-9
+                                      w-9
+                                      shrink-0
+                                      items-center
+                                      justify-center
+                                      rounded-full
+                                      text-xs
+                                      font-semibold
+                                      ${
+                                        selected
+                                          ? "bg-[#b7ff00]/25 text-slate-900"
+                                          : "bg-slate-100 text-slate-600"
+                                      }
+                                    `}
+                                  >
+                                    {initials || (
+                                      <User className="h-4 w-4" />
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <p
+                                      className={`
+                                        truncate
+                                        text-sm
+                                        font-medium
+                                        ${
+                                          selected
+                                            ? "text-slate-950"
+                                            : "text-slate-800"
+                                        }
+                                      `}
+                                    >
+                                      {customer.first_name}{" "}
+                                      {customer.last_name}
+                                    </p>
+
+                                    <div className="mt-0.5 flex min-w-0 items-center gap-2">
+                                      {customer.phone && (
+                                        <span className="truncate text-xs text-slate-400">
+                                          {customer.phone}
+                                        </span>
+                                      )}
+
+                                      {customer.email && (
+                                        <>
+                                          <span className="text-slate-300">
+                                            •
+                                          </span>
+
+                                          <span className="truncate text-xs text-slate-400">
+                                            {customer.email}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {selected && (
+                                    <Check className="h-4 w-4 shrink-0 text-[#78a900]" />
+                                  )}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        <div className="border-t border-slate-100 bg-slate-50/80 p-2">
+                          <button
+                            type="button"
+                            onClick={handleOpenCreateCustomer}
+                            disabled={
+                              saving ||
+                              creatingCustomer
+                            }
+                            className="
+                              flex
+                              w-full
+                              items-center
+                              justify-center
+                              gap-2
+                              rounded-lg
+                              px-3
+                              py-2.5
+                              text-sm
+                              font-medium
+                              text-slate-700
+                              transition
+                              hover:bg-white
+                              hover:text-slate-950
+                            "
+                          >
+                            <UserPlus className="h-4 w-4" />
+                            Create new customer
+                          </button>
+                        </div>
+                      </div>
                     )}
+                  </div>
 
                   {/* SELECTED CUSTOMER */}
                   {selectedCustomer && (
@@ -1182,6 +1510,35 @@ export default function WalkInReservationModal({
                             </p>
                           )}
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerId("");
+                            setCustomerSearch("");
+                            setCustomerDropdownOpen(true);
+                          }}
+                          disabled={
+                            saving ||
+                            creatingCustomer
+                          }
+                          className="
+                            flex
+                            h-7
+                            w-7
+                            shrink-0
+                            items-center
+                            justify-center
+                            rounded-lg
+                            text-slate-400
+                            transition
+                            hover:bg-white
+                            hover:text-slate-700
+                          "
+                          aria-label="Change customer"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -1635,7 +1992,6 @@ export default function WalkInReservationModal({
               </div>
 
               {/* DURATION */}
-
               <div>
                 <label
                   className="
@@ -1651,44 +2007,25 @@ export default function WalkInReservationModal({
                   Duration
                 </label>
 
-                <select
-                  value={
-                    durationHours
-                  }
-                  onChange={(event) =>
-                    handleDurationChange(
-                      event.target
-                        .value
-                    )
-                  }
-                  disabled={
-                    saving ||
-                    creatingCustomer
-                  }
+                <div
                   className="
+                    flex
                     h-11
-                    w-full
+                    items-center
                     rounded-xl
                     border
                     border-slate-200
-                    bg-white
+                    bg-slate-50
                     px-4
                     text-sm
+                    font-medium
                     text-slate-700
-                    outline-none
-                    focus:border-[#9bd900]
-                    focus:ring-2
-                    focus:ring-[#b7ff00]/20
                   "
                 >
-                  <option value="1">
-                    1 Hour
-                  </option>
-
-                  <option value="2">
-                    2 Hours
-                  </option>
-                </select>
+                  {selectedDurationHours > 0
+                    ? `${selectedDurationHours} Hour${selectedDurationHours > 1 ? "s" : ""} selected`
+                    : "Select time slots"}
+                </div>
               </div>
             </div>
 
@@ -1728,6 +2065,11 @@ export default function WalkInReservationModal({
                   </span>
                 )}
               </div>
+
+              <p className="mb-3 text-xs text-slate-400">
+                Select one or more consecutive time slots.
+                Click a selected slot again to remove it.
+              </p>
 
               {!courtId ||
               !reservationDate ? (
@@ -1855,12 +2197,21 @@ export default function WalkInReservationModal({
                   {availableSlots.map(
                     (slot) => {
                       const selected =
-                        selectedSlot
-                          ?.start_time ===
-                          slot.start_time &&
-                        selectedSlot
-                          ?.end_time ===
-                          slot.end_time;
+                        selectedSlots.some(
+                          (item) =>
+                            timeToMinutes(
+                              item.start_time
+                            ) ===
+                              timeToMinutes(
+                                slot.start_time
+                              ) &&
+                            timeToMinutes(
+                              item.end_time
+                            ) ===
+                              timeToMinutes(
+                                slot.end_time
+                              )
+                        );
 
                       return (
                         <button
@@ -1907,33 +2258,38 @@ export default function WalkInReservationModal({
                             className="
                               flex
                               items-center
+                              justify-between
                               gap-2
                             "
                           >
-                            <Clock3
-                              className="
-                                h-4
-                                w-4
-                                text-slate-400
-                              "
-                            />
+                            <div className="flex items-center gap-2">
+                              <Clock3
+                                className={
+                                  selected
+                                    ? "h-4 w-4 text-[#78a900]"
+                                    : "h-4 w-4 text-slate-400"
+                                }
+                              />
 
-                            <span
-                              className="
-                                text-sm
-                                font-medium
-                              "
-                            >
-                              {formatTime(
-                                slot.start_time
-                              )}
+                              <span
+                                className="
+                                  text-sm
+                                  font-medium
+                                "
+                              >
+                                {formatTime(
+                                  slot.start_time
+                                )}
+                                {" – "}
+                                {formatTime(
+                                  slot.end_time
+                                )}
+                              </span>
+                            </div>
 
-                              {" – "}
-
-                              {formatTime(
-                                slot.end_time
-                              )}
-                            </span>
+                            {selected && (
+                              <Check className="h-4 w-4 shrink-0 text-[#78a900]" />
+                            )}
                           </div>
                         </button>
                       );
@@ -1942,6 +2298,62 @@ export default function WalkInReservationModal({
                 </div>
               )}
             </section>
+
+            {selectedSlots.length > 0 && (
+              <div
+                className="
+                  mt-5
+                  rounded-xl
+                  border
+                  border-[#9bd900]/30
+                  bg-[#b7ff00]/10
+                  px-4
+                  py-3
+                "
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Selected Time
+                    </p>
+
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {formatTime(selectedStartTime!)}
+                      {" – "}
+                      {formatTime(selectedEndTime!)}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
+                      {selectedDurationHours} Hour
+                      {selectedDurationHours > 1 ? "s" : ""}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSlots([]);
+                        setError("");
+                      }}
+                      disabled={saving || creatingCustomer}
+                      className="
+                        rounded-full
+                        px-2.5
+                        py-1
+                        text-xs
+                        font-medium
+                        text-slate-500
+                        hover:bg-white
+                        hover:text-slate-800
+                      "
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* =================================================
                 REMARKS
@@ -2083,7 +2495,7 @@ export default function WalkInReservationModal({
                 !customerId ||
                 !courtId ||
                 !reservationDate ||
-                !selectedSlot
+                selectedSlots.length === 0
               }
               className="
                 h-11
