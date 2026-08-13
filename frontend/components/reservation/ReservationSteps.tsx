@@ -279,9 +279,25 @@ const nextStep = () => {
     return;
   }
 
-  if (currentStep === 2 && !selectedStartTime) {
-    toast.error("Please select an available time slot.");
+  if (
+    currentStep === 2 &&
+    (!selectedStartTime || !selectedEndTime)
+  ) {
+    toast.error("Please select your start and end time.");
     return;
+  }
+
+  // Guest validation
+  if (currentStep === 3) {
+    if (!guest.guest_name.trim()) {
+      toast.error("Please enter the guest name.");
+      return;
+    }
+
+    if (!guest.guest_phone.trim()) {
+      toast.error("Please enter the phone number.");
+      return;
+    }
   }
 
   if (currentStep === 5) {
@@ -295,16 +311,19 @@ const nextStep = () => {
       return;
     }
   }
-  
-const next = Math.min(currentStep + 1, steps.length - 1);
 
-setCurrentStep(next);
+  const next = Math.min(
+    currentStep + 1,
+    steps.length - 1
+  );
 
-requestAnimationFrame(() => {
+  setCurrentStep(next);
+
   requestAnimationFrame(() => {
-    scrollToCurrentStep(next);
+    requestAnimationFrame(() => {
+      scrollToCurrentStep(next);
+    });
   });
-});
 };
    const previousStep = () => {
   const prev = Math.max(currentStep - 1, 0);
@@ -629,15 +648,16 @@ const submitReservation = async () => {
         id="time-step"
         className="scroll-mt-28"
       >
-        <TimeSelector
-          courtId={selectedCourt}
-          date={selectedDate}
-          selectedTime={selectedStartTime}
-          onSelect={(start, end) => {
-            setSelectedStartTime(start);
-            setSelectedEndTime(end);
-          }}
-        />
+       <TimeSelector
+        courtId={selectedCourt}
+        date={selectedDate}
+        selectedTime={selectedStartTime}
+        selectedEndTime={selectedEndTime}
+        onSelect={(start, end) => {
+          setSelectedStartTime(start);
+          setSelectedEndTime(end);
+        }}
+      />
       </div>
     )}
 

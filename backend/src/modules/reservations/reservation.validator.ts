@@ -26,24 +26,32 @@ export const createReservationSchema = z.object({
   // CUSTOMER INFORMATION
   // =====================================================
 
+  // REQUIRED
   guest_name: z
     .string()
     .trim()
     .min(2, "Customer name is required.")
     .max(150),
 
+  // OPTIONAL
+  // Empty string is allowed.
+  // If provided, it must be a valid email address.
   guest_email: z
     .string()
     .trim()
     .email("Invalid email address.")
-    .max(150),
+    .max(150)
+    .optional()
+    .or(z.literal("")),
 
+  // REQUIRED
   guest_phone: z
     .string()
     .trim()
     .min(7, "Customer phone is required.")
     .max(30),
 
+  // OPTIONAL
   remarks: z
     .string()
     .trim()
@@ -101,7 +109,6 @@ export const createWalkInReservationSchema = z.object({
     .optional(),
 });
 
-
 // =====================================================
 // UPDATE RESERVATION
 // =====================================================
@@ -120,8 +127,6 @@ export const updateReservationSchema = z.object({
     "Paid",
   ]),
 });
-
-
 
 // =====================================================
 // TYPES

@@ -136,9 +136,9 @@ export class ReservationService {
       );
     }
 
-    if (totalHours > 2) {
+    if (totalHours <= 0) {
       throw new BadRequestError(
-        "Maximum reservation is 2 hours."
+        "End time must be greater than start time."
       );
     }
 
