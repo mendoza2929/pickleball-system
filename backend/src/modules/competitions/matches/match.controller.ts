@@ -1,4 +1,7 @@
-import { Request, Response } from "express";
+import {
+  Request,
+  Response,
+} from "express";
 
 import {
   createMatchFromQueue,
@@ -18,12 +21,19 @@ export async function create(
   res: Response
 ) {
   try {
-    const competitionSessionId = Number(
-      req.params.sessionId
-    );
+    const competitionSessionId =
+      Number(
+        req.params.sessionId
+      );
+
+    // ------------------------------------------------
+    // Validate session ID
+    // ------------------------------------------------
 
     if (
-      !Number.isInteger(competitionSessionId) ||
+      !Number.isInteger(
+        competitionSessionId
+      ) ||
       competitionSessionId <= 0
     ) {
       return res.status(400).json({
@@ -32,22 +42,55 @@ export async function create(
       });
     }
 
-    const { teamAQueueIds, teamBQueueIds } =
-      req.body ?? {};
+    // ------------------------------------------------
+    // Team selections
+    //
+    // These are optional because the service
+    // supports automatic queue selection.
+    // ------------------------------------------------
 
-    const data = await createMatchFromQueue(
-      competitionSessionId,
+    const {
       teamAQueueIds,
-      teamBQueueIds
-    );
+      teamBQueueIds,
+    } = req.body ?? {};
+
+    // ------------------------------------------------
+    // CREATE MATCH
+    //
+    // The service is responsible for:
+    //
+    // 1. Getting waiting players
+    // 2. Creating the match
+    // 3. Adding players
+    // 4. Marking queue players as matched
+    // 5. Automatically assigning an available court
+    // ------------------------------------------------
+
+    const data =
+      await createMatchFromQueue(
+        competitionSessionId,
+        teamAQueueIds,
+        teamBQueueIds
+      );
+
+    // ------------------------------------------------
+    // RETURN MATCH
+    // ------------------------------------------------
 
     return res.status(201).json({
       success: true,
-      message: "Match created successfully",
+      message:
+        data?.court_id
+          ? "Match created and court assigned successfully"
+          : "Match created successfully. Waiting for an available court.",
       data,
     });
+
   } catch (error: any) {
-    console.error("Create match error:", error);
+    console.error(
+      "Create match error:",
+      error
+    );
 
     return res.status(400).json({
       success: false,
@@ -67,29 +110,40 @@ export async function getBySession(
   res: Response
 ) {
   try {
-    const competitionSessionId = Number(
-      req.params.sessionId
-    );
+    const competitionSessionId =
+      Number(
+        req.params.sessionId
+      );
 
     if (
-      !Number.isInteger(competitionSessionId) ||
+      !Number.isInteger(
+        competitionSessionId
+      ) ||
       competitionSessionId <= 0
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid session ID",
+        message:
+          "Invalid session ID",
       });
     }
 
-    const data = await getSessionMatches(
-      competitionSessionId
-    );
+    const data =
+      await getSessionMatches(
+        competitionSessionId
+      );
 
     return res.status(200).json({
       success: true,
       data,
     });
+
   } catch (error: any) {
+    console.error(
+      "Get session matches error:",
+      error
+    );
+
     return res.status(404).json({
       success: false,
       message:
@@ -108,22 +162,36 @@ export async function getOne(
   res: Response
 ) {
   try {
-    const id = Number(req.params.id);
+    const id =
+      Number(
+        req.params.id
+      );
 
-    if (!Number.isInteger(id) || id <= 0) {
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid match ID",
+        message:
+          "Invalid match ID",
       });
     }
 
-    const data = await getMatch(id);
+    const data =
+      await getMatch(id);
 
     return res.status(200).json({
       success: true,
       data,
     });
+
   } catch (error: any) {
+    console.error(
+      "Get match error:",
+      error
+    );
+
     return res.status(404).json({
       success: false,
       message:
@@ -142,27 +210,55 @@ export async function update(
   res: Response
 ) {
   try {
-    const id = Number(req.params.id);
+    const id =
+      Number(
+        req.params.id
+      );
 
-    if (!Number.isInteger(id) || id <= 0) {
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid match ID",
+        message:
+          "Invalid match ID",
       });
     }
 
-    const { status } = req.body;
-
-    const data = await updateMatch(id, {
+    const {
       status,
-    } as any);
+    } = req.body ?? {};
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Match status is required",
+      });
+    }
+
+    const data =
+      await updateMatch(
+        id,
+        {
+          status,
+        } as any
+      );
 
     return res.status(200).json({
       success: true,
-      message: "Match updated successfully",
+      message:
+        "Match updated successfully",
       data,
     });
+
   } catch (error: any) {
+    console.error(
+      "Update match error:",
+      error
+    );
+
     return res.status(400).json({
       success: false,
       message:
@@ -181,23 +277,38 @@ export async function start(
   res: Response
 ) {
   try {
-    const id = Number(req.params.id);
+    const id =
+      Number(
+        req.params.id
+      );
 
-    if (!Number.isInteger(id) || id <= 0) {
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid match ID",
+        message:
+          "Invalid match ID",
       });
     }
 
-    const data = await startMatchPlay(id);
+    const data =
+      await startMatchPlay(id);
 
     return res.status(200).json({
       success: true,
-      message: "Match started successfully",
+      message:
+        "Match started successfully",
       data,
     });
+
   } catch (error: any) {
+    console.error(
+      "Start match error:",
+      error
+    );
+
     return res.status(400).json({
       success: false,
       message:
@@ -216,11 +327,14 @@ export async function complete(
   res: Response
 ) {
   try {
-    const id = Number(req.params.id);
+    const id =
+      Number(
+        req.params.id
+      );
 
-    // ----------------------------------------------
+    // ------------------------------------------------
     // Validate match ID
-    // ----------------------------------------------
+    // ------------------------------------------------
 
     if (
       !Number.isInteger(id) ||
@@ -228,28 +342,33 @@ export async function complete(
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid match ID",
+        message:
+          "Invalid match ID",
       });
     }
 
-    // ----------------------------------------------
+    // ------------------------------------------------
     // Get scores
-    // ----------------------------------------------
+    // ------------------------------------------------
 
-    const teamAScore = Number(
-      req.body.teamAScore
-    );
+    const teamAScore =
+      Number(
+        req.body?.teamAScore
+      );
 
-    const teamBScore = Number(
-      req.body.teamBScore
-    );
+    const teamBScore =
+      Number(
+        req.body?.teamBScore
+      );
 
-    // ----------------------------------------------
-    // Validate Team A score
-    // ----------------------------------------------
+    // ------------------------------------------------
+    // Validate Team A
+    // ------------------------------------------------
 
     if (
-      !Number.isInteger(teamAScore) ||
+      !Number.isInteger(
+        teamAScore
+      ) ||
       teamAScore < 0
     ) {
       return res.status(400).json({
@@ -259,12 +378,14 @@ export async function complete(
       });
     }
 
-    // ----------------------------------------------
-    // Validate Team B score
-    // ----------------------------------------------
+    // ------------------------------------------------
+    // Validate Team B
+    // ------------------------------------------------
 
     if (
-      !Number.isInteger(teamBScore) ||
+      !Number.isInteger(
+        teamBScore
+      ) ||
       teamBScore < 0
     ) {
       return res.status(400).json({
@@ -274,12 +395,13 @@ export async function complete(
       });
     }
 
-    // ----------------------------------------------
-    // Scores cannot be equal
-    // ----------------------------------------------
+    // ------------------------------------------------
+    // No tie
+    // ------------------------------------------------
 
     if (
-      teamAScore === teamBScore
+      teamAScore ===
+      teamBScore
     ) {
       return res.status(400).json({
         success: false,
@@ -288,9 +410,12 @@ export async function complete(
       });
     }
 
-    // ----------------------------------------------
+    // ------------------------------------------------
     // Complete match
-    // ----------------------------------------------
+    //
+    // finishMatch() also creates the next match
+    // and attempts automatic court allocation.
+    // ------------------------------------------------
 
     const data =
       await finishMatch(

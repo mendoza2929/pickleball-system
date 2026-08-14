@@ -7,20 +7,23 @@ import db from "../../../config/database";
 export async function findCourtById(
   courtId: number
 ) {
-  const [rows] = await db.execute(
-    `
-    SELECT
-      id,
-      name,
-      status
-    FROM courts
-    WHERE id = ?
-    LIMIT 1
-    `,
-    [courtId]
-  );
+  const [rows] =
+    await db.execute(
+      `
+        SELECT
+          id,
+          name,
+          status
+        FROM courts
+        WHERE id = ?
+        LIMIT 1
+      `,
+      [courtId]
+    );
 
-  return (rows as any[])[0] ?? null;
+  return (
+    rows as any[]
+  )[0] ?? null;
 }
 
 // ==================================================
@@ -30,28 +33,36 @@ export async function findCourtById(
 export async function findMatchForAssignment(
   matchId: number
 ) {
-  const [rows] = await db.execute(
-    `
-    SELECT
-      id,
-      competition_session_id,
-      court_id,
-      court_assigned_at,
-      match_number,
-      status,
-      started_at,
-      completed_at
+  const [rows] =
+    await db.execute(
+      `
+        SELECT
+          cm.id,
+          cm.competition_session_id,
+          cm.court_id,
+          cm.court_assigned_at,
+          cm.match_number,
+          cm.status,
+          cm.started_at,
+          cm.completed_at,
 
-    FROM competition_matches
+          c.name AS court_name
 
-    WHERE id = ?
+        FROM competition_matches cm
 
-    LIMIT 1
-    `,
-    [matchId]
-  );
+        LEFT JOIN courts c
+          ON c.id = cm.court_id
 
-  return (rows as any[])[0] ?? null;
+        WHERE cm.id = ?
+
+        LIMIT 1
+      `,
+      [matchId]
+    );
+
+  return (
+    rows as any[]
+  )[0] ?? null;
 }
 
 // ==================================================
@@ -85,7 +96,8 @@ export async function findActiveMatchByCourtId(
   ];
 
   if (
-    excludeMatchId !== undefined
+    excludeMatchId !==
+    undefined
   ) {
     sql += `
       AND id != ?
@@ -107,7 +119,9 @@ export async function findActiveMatchByCourtId(
       params
     );
 
-  return (rows as any[])[0] ?? null;
+  return (
+    rows as any[]
+  )[0] ?? null;
 }
 
 // ==================================================
@@ -117,65 +131,66 @@ export async function findActiveMatchByCourtId(
 export async function findQueueEntriesForMatch(
   matchId: number
 ) {
-  const [rows] = await db.execute(
-    `
-    SELECT
-      cq.id,
-      cq.status,
-      cq.competition_session_id,
-      cq.competition_checkin_id,
-      cr.competition_player_id
-
-    FROM competition_match_players cmp
-
-    INNER JOIN competition_matches cm
-      ON cm.id =
-         cmp.competition_match_id
-
-    INNER JOIN competition_checkins cc
-      ON cc.id = (
+  const [rows] =
+    await db.execute(
+      `
         SELECT
-          cq2.competition_checkin_id
+          cq.id,
+          cq.status,
+          cq.competition_session_id,
+          cq.competition_checkin_id,
+          cr.competition_player_id
 
-        FROM competition_queue cq2
+        FROM competition_match_players cmp
 
-        INNER JOIN competition_checkins cc2
-          ON cc2.id =
-             cq2.competition_checkin_id
+        INNER JOIN competition_matches cm
+          ON cm.id =
+             cmp.competition_match_id
 
-        INNER JOIN competition_registrations cr2
-          ON cr2.id =
-             cc2.competition_registration_id
+        INNER JOIN competition_checkins cc
+          ON cc.id = (
+            SELECT
+              cq2.competition_checkin_id
+
+            FROM competition_queue cq2
+
+            INNER JOIN competition_checkins cc2
+              ON cc2.id =
+                 cq2.competition_checkin_id
+
+            INNER JOIN competition_registrations cr2
+              ON cr2.id =
+                 cc2.competition_registration_id
+
+            WHERE
+              cq2.competition_session_id =
+                cm.competition_session_id
+
+              AND cr2.competition_player_id =
+                cmp.competition_player_id
+
+            ORDER BY
+              cq2.id DESC
+
+            LIMIT 1
+          )
+
+        INNER JOIN competition_registrations cr
+          ON cr.id =
+             cc.competition_registration_id
+
+        INNER JOIN competition_queue cq
+          ON cq.competition_checkin_id =
+             cc.id
 
         WHERE
-          cq2.competition_session_id =
-            cm.competition_session_id
-
-          AND cr2.competition_player_id =
-            cmp.competition_player_id
+          cmp.competition_match_id = ?
 
         ORDER BY
-          cq2.id DESC
-
-        LIMIT 1
-      )
-
-    INNER JOIN competition_registrations cr
-      ON cr.id =
-         cc.competition_registration_id
-
-    INNER JOIN competition_queue cq
-      ON cq.competition_checkin_id =
-         cc.id
-
-    WHERE
-      cmp.competition_match_id = ?
-
-    ORDER BY
-      cmp.position ASC
-    `,
-    [matchId]
-  );
+          cmp.position ASC
+      `,
+      [matchId]
+    );
 
   return rows as any[];
 }
@@ -202,20 +217,22 @@ export async function assignCourtToMatch(
     // 1. Lock match
     // ----------------------------------------------
 
-    const [matchRows]: any[] =
+    const [
+      matchRows,
+    ]: any[] =
       await connection.execute(
         `
-        SELECT
-          id,
-          competition_session_id,
-          court_id,
-          status
+          SELECT
+            id,
+            competition_session_id,
+            court_id,
+            status
 
-        FROM competition_matches
+          FROM competition_matches
 
-        WHERE id = ?
+          WHERE id = ?
 
-        FOR UPDATE
+          FOR UPDATE
         `,
         [matchId]
       );
@@ -234,7 +251,8 @@ export async function assignCourtToMatch(
     // ----------------------------------------------
 
     if (
-      match.status !== "pending"
+      match.status !==
+      "pending"
     ) {
       throw new Error(
         `Match cannot be assigned a court while status is "${match.status}"`
@@ -242,7 +260,7 @@ export async function assignCourtToMatch(
     }
 
     // ----------------------------------------------
-    // 3. Match must not have court
+    // 3. Match must not already have court
     // ----------------------------------------------
 
     if (
@@ -257,21 +275,23 @@ export async function assignCourtToMatch(
     // 4. Lock court
     // ----------------------------------------------
 
-    const [courtRows]: any[] =
+    const [
+      courtRows,
+    ]: any[] =
       await connection.execute(
         `
-        SELECT
-          id,
-          name,
-          status
+          SELECT
+            id,
+            name,
+            status
 
-        FROM courts
+          FROM courts
 
-        WHERE id = ?
+          WHERE id = ?
 
-        LIMIT 1
+          LIMIT 1
 
-        FOR UPDATE
+          FOR UPDATE
         `,
         [courtId]
       );
@@ -286,7 +306,8 @@ export async function assignCourtToMatch(
     }
 
     if (
-      court.status !== "Available"
+      court.status !==
+      "Available"
     ) {
       throw new Error(
         "Court is not available"
@@ -297,28 +318,30 @@ export async function assignCourtToMatch(
     // 5. Check active Open Play match
     // ----------------------------------------------
 
-    const [activeRows]: any[] =
+    const [
+      activeRows,
+    ]: any[] =
       await connection.execute(
         `
-        SELECT
-          id,
-          match_number,
-          status
+          SELECT
+            id,
+            match_number,
+            status
 
-        FROM competition_matches
+          FROM competition_matches
 
-        WHERE court_id = ?
+          WHERE court_id = ?
 
-          AND status IN (
-            'called',
-            'playing'
-          )
+            AND status IN (
+              'called',
+              'playing'
+            )
 
-          AND id != ?
+            AND id != ?
 
-        LIMIT 1
+          LIMIT 1
 
-        FOR UPDATE
+          FOR UPDATE
         `,
         [
           courtId,
@@ -341,15 +364,15 @@ export async function assignCourtToMatch(
 
     await connection.execute(
       `
-      UPDATE competition_matches
+        UPDATE competition_matches
 
-      SET
-        court_id = ?,
-        court_assigned_at =
-          CURRENT_TIMESTAMP,
-        status = 'called'
+        SET
+          court_id = ?,
+          court_assigned_at =
+            CURRENT_TIMESTAMP,
+          status = 'called'
 
-      WHERE id = ?
+        WHERE id = ?
       `,
       [
         courtId,
@@ -361,15 +384,17 @@ export async function assignCourtToMatch(
     // 7. Get match players
     // ----------------------------------------------
 
-    const [playerRows]: any[] =
+    const [
+      playerRows,
+    ]: any[] =
       await connection.execute(
         `
-        SELECT
-          competition_player_id
+          SELECT
+            competition_player_id
 
-        FROM competition_match_players
+          FROM competition_match_players
 
-        WHERE competition_match_id = ?
+          WHERE competition_match_id = ?
         `,
         [matchId]
       );
@@ -379,35 +404,36 @@ export async function assignCourtToMatch(
     // ----------------------------------------------
 
     for (
-      const player of playerRows
+      const player
+      of playerRows
     ) {
       await connection.execute(
         `
-        UPDATE competition_queue cq
+          UPDATE competition_queue cq
 
-        INNER JOIN competition_checkins cc
-          ON cc.id =
-             cq.competition_checkin_id
+          INNER JOIN competition_checkins cc
+            ON cc.id =
+               cq.competition_checkin_id
 
-        INNER JOIN competition_registrations cr
-          ON cr.id =
-             cc.competition_registration_id
+          INNER JOIN competition_registrations cr
+            ON cr.id =
+               cc.competition_registration_id
 
-        SET
-          cq.status = 'called',
+          SET
+            cq.status = 'called',
 
-          cq.called_at =
-            COALESCE(
-              cq.called_at,
-              CURRENT_TIMESTAMP
-            )
+            cq.called_at =
+              COALESCE(
+                cq.called_at,
+                CURRENT_TIMESTAMP
+              )
 
-        WHERE
-          cq.competition_session_id = ?
+          WHERE
+            cq.competition_session_id = ?
 
-          AND cr.competition_player_id = ?
+            AND cr.competition_player_id = ?
 
-          AND cq.status = 'matched'
+            AND cq.status = 'matched'
         `,
         [
           match.competition_session_id,
@@ -418,13 +444,19 @@ export async function assignCourtToMatch(
 
     await connection.commit();
 
+    // ----------------------------------------------
+    // Return updated match
+    // ----------------------------------------------
+
     return findMatchForAssignment(
       matchId
     );
 
   } catch (error) {
     await connection.rollback();
+
     throw error;
+
   } finally {
     connection.release();
   }
@@ -433,7 +465,6 @@ export async function assignCourtToMatch(
 // ==================================================
 // REMOVE COURT
 //
-// Only before match starts.
 // match -> pending
 // queue -> matched
 // ==================================================
@@ -451,20 +482,22 @@ export async function removeCourtFromMatch(
     // 1. Lock match
     // ----------------------------------------------
 
-    const [matchRows]: any[] =
+    const [
+      matchRows,
+    ]: any[] =
       await connection.execute(
         `
-        SELECT
-          id,
-          competition_session_id,
-          court_id,
-          status
+          SELECT
+            id,
+            competition_session_id,
+            court_id,
+            status
 
-        FROM competition_matches
+          FROM competition_matches
 
-        WHERE id = ?
+          WHERE id = ?
 
-        FOR UPDATE
+          FOR UPDATE
         `,
         [matchId]
       );
@@ -495,7 +528,8 @@ export async function removeCourtFromMatch(
     // ----------------------------------------------
 
     if (
-      match.status === "playing"
+      match.status ===
+      "playing"
     ) {
       throw new Error(
         "Cannot remove court from a playing match"
@@ -507,7 +541,8 @@ export async function removeCourtFromMatch(
     // ----------------------------------------------
 
     if (
-      match.status === "completed"
+      match.status ===
+      "completed"
     ) {
       throw new Error(
         "Completed match cannot be changed"
@@ -520,31 +555,33 @@ export async function removeCourtFromMatch(
 
     await connection.execute(
       `
-      UPDATE competition_matches
+        UPDATE competition_matches
 
-      SET
-        court_id = NULL,
-        court_assigned_at = NULL,
-        status = 'pending'
+        SET
+          court_id = NULL,
+          court_assigned_at = NULL,
+          status = 'pending'
 
-      WHERE id = ?
+        WHERE id = ?
       `,
       [matchId]
     );
 
     // ----------------------------------------------
-    // 6. Get match players
+    // 6. Get players
     // ----------------------------------------------
 
-    const [playerRows]: any[] =
+    const [
+      playerRows,
+    ]: any[] =
       await connection.execute(
         `
-        SELECT
-          competition_player_id
+          SELECT
+            competition_player_id
 
-        FROM competition_match_players
+          FROM competition_match_players
 
-        WHERE competition_match_id = ?
+          WHERE competition_match_id = ?
         `,
         [matchId]
       );
@@ -554,30 +591,31 @@ export async function removeCourtFromMatch(
     // ----------------------------------------------
 
     for (
-      const player of playerRows
+      const player
+      of playerRows
     ) {
       await connection.execute(
         `
-        UPDATE competition_queue cq
+          UPDATE competition_queue cq
 
-        INNER JOIN competition_checkins cc
-          ON cc.id =
-             cq.competition_checkin_id
+          INNER JOIN competition_checkins cc
+            ON cc.id =
+               cq.competition_checkin_id
 
-        INNER JOIN competition_registrations cr
-          ON cr.id =
-             cc.competition_registration_id
+          INNER JOIN competition_registrations cr
+            ON cr.id =
+               cc.competition_registration_id
 
-        SET
-          cq.status = 'matched',
-          cq.called_at = NULL
+          SET
+            cq.status = 'matched',
+            cq.called_at = NULL
 
-        WHERE
-          cq.competition_session_id = ?
+          WHERE
+            cq.competition_session_id = ?
 
-          AND cr.competition_player_id = ?
+            AND cr.competition_player_id = ?
 
-          AND cq.status = 'called'
+            AND cq.status = 'called'
         `,
         [
           match.competition_session_id,
@@ -594,7 +632,9 @@ export async function removeCourtFromMatch(
 
   } catch (error) {
     await connection.rollback();
+
     throw error;
+
   } finally {
     connection.release();
   }

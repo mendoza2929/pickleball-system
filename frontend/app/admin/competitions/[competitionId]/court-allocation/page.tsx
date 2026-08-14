@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
@@ -75,9 +75,30 @@ export default function CourtAllocationPage() {
 
   const router = useRouter();
 
+  const searchParams = useSearchParams();
+
   const competitionId = Number(
     params.competitionId
   );
+
+  // ==========================================================
+  // COMPETITION DIVISION ID
+  // ==========================================================
+  //
+  // Example URL:
+  //
+  // /admin/competitions/12/court-allocation?divisionId=16
+  //
+  // The divisionId identifies which competition division
+  // this court allocation belongs to.
+  // ==========================================================
+
+  const divisionIdParam =
+    searchParams.get("divisionId");
+
+  const divisionId = divisionIdParam
+    ? Number(divisionIdParam)
+    : NaN;
 
   // ==========================================================
   // COMPETITION
@@ -832,7 +853,7 @@ export default function CourtAllocationPage() {
     loadCompetition();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [competitionId]);
+  }, [competitionId, divisionId]);
 
   // ==========================================================
   // TOGGLE COURT
@@ -926,6 +947,28 @@ export default function CourtAllocationPage() {
       return;
     }
 
+    // --------------------------------------------------------
+    // DIVISION ID
+    // --------------------------------------------------------
+    //
+    // This page must be opened with:
+    //
+    // ?divisionId=16
+    //
+    // Do not allow an allocation without a division.
+    // --------------------------------------------------------
+
+    if (
+      !Number.isInteger(divisionId) ||
+      divisionId <= 0
+    ) {
+      setError(
+        "Competition division is required."
+      );
+
+      return;
+    }
+
     if (
       !competition
     ) {
@@ -997,6 +1040,26 @@ export default function CourtAllocationPage() {
       // Allocate each selected court
       // ------------------------------------------------------
 
+      console.log(
+        "[Court Allocation] Saving:",
+        {
+          competitionId,
+          divisionId,
+          selectedCourtIds:
+            selectedCourts.map(
+              (court) => court.id
+            ),
+          allocationDate,
+          startTime,
+          endTime,
+          allocationType:
+            competition.type ===
+            "tournament"
+              ? "tournament"
+              : "open_play",
+        }
+      );
+
       for (
         const court of selectedCourts
       ) {
@@ -1025,8 +1088,16 @@ export default function CourtAllocationPage() {
               competition_id:
                 competitionId,
 
+              // IMPORTANT:
+              // Use the divisionId from the URL.
+              //
+              // Example:
+              // ?divisionId=16
+              //
+              // This makes the allocation belong to
+              // competition division 16 instead of null.
               competition_division_id:
-                null,
+                divisionId,
 
               court_id:
                 court.id,
@@ -1188,6 +1259,14 @@ export default function CourtAllocationPage() {
             using the competition's scheduled
             date and time.
           </p>
+
+          <div className="mt-3 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+            Division ID:{" "}
+            {Number.isInteger(divisionId) &&
+            divisionId > 0
+              ? divisionId
+              : "Missing"}
+          </div>
         </div>
 
         {/* ================================================== */}

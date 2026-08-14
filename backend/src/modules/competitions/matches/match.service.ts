@@ -30,7 +30,6 @@ import {
   UpdateMatchStatusInput,
 } from "./match.types";
 
-
 // ==================================================
 // VALID MATCH STATUSES
 // ==================================================
@@ -43,13 +42,15 @@ const VALID_STATUSES: MatchStatus[] = [
   "cancelled",
 ];
 
-
 // ==================================================
 // MATCH FORMAT HELPERS
 // ==================================================
 
-async function getMatchFormat(session: any) {
-  let rawFormat = session?.format;
+async function getMatchFormat(
+  session: any
+) {
+  let rawFormat =
+    session?.format;
 
   // ------------------------------------------------
   // Fallback:
@@ -61,17 +62,22 @@ async function getMatchFormat(session: any) {
     !rawFormat &&
     session?.competition_division_id
   ) {
-    const [rows] = await db.execute(
-      `
-        SELECT format
-        FROM competition_divisions
-        WHERE id = ?
-        LIMIT 1
-      `,
-      [
-        session.competition_division_id,
-      ]
-    );
+    const [rows] =
+      await db.execute(
+        `
+          SELECT
+            format
+
+          FROM competition_divisions
+
+          WHERE id = ?
+
+          LIMIT 1
+        `,
+        [
+          session.competition_division_id,
+        ]
+      );
 
     rawFormat =
       (rows as any[])?.[0]?.format;
@@ -81,23 +87,31 @@ async function getMatchFormat(session: any) {
   // Normalize format
   // ------------------------------------------------
 
-  const normalizedFormat = String(
-    rawFormat || ""
-  )
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]+/g, "");
+  const normalizedFormat =
+    String(
+      rawFormat || ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(
+        /[\s_-]+/g,
+        ""
+      );
 
   // ------------------------------------------------
   // Singles / Doubles
   // ------------------------------------------------
 
   const isSingles =
-    normalizedFormat === "single" ||
-    normalizedFormat === "singles";
+    normalizedFormat ===
+      "single" ||
+    normalizedFormat ===
+      "singles";
 
   const playersPerTeam =
-    isSingles ? 1 : 2;
+    isSingles
+      ? 1
+      : 2;
 
   return {
     isSingles,
@@ -114,6 +128,126 @@ async function getMatchFormat(session: any) {
   };
 }
 
+// ==================================================
+// AUTO ASSIGN EXISTING PENDING MATCH
+// ==================================================
+//
+// This is important.
+//
+// When a court becomes free after another match
+// completes, first look for an existing pending
+// match before creating another match.
+//
+// ==================================================
+
+async function assignPendingMatchCourt(
+  competitionSessionId: number
+) {
+  const matches =
+    await findMatchesBySessionId(
+      competitionSessionId
+    );
+
+  if (
+    !matches ||
+    matches.length === 0
+  ) {
+    return null;
+  }
+
+  // ------------------------------------------------
+  // Find oldest pending match without court
+  // ------------------------------------------------
+
+  const pendingMatch =
+    matches
+      .filter(
+        (match: any) =>
+          match.status ===
+            "pending" &&
+          (
+            match.court_id ===
+              null ||
+            match.court_id ===
+              undefined
+          )
+      )
+      .sort(
+        (a: any, b: any) =>
+          Number(a.id) -
+          Number(b.id)
+      )[0];
+
+  if (!pendingMatch) {
+    return null;
+  }
+
+  // ------------------------------------------------
+  // Try to assign court
+  // ------------------------------------------------
+
+  try {
+    const assignedMatch =
+      await assignAvailableCourt(
+        Number(
+          pendingMatch.id
+        )
+      );
+
+    // ------------------------------------------------
+    // IMPORTANT:
+    //
+    // assignAvailableCourt() may return the same
+    // pending match when no court exists.
+    //
+    // Only return it as successful if it actually
+    // received a court.
+    // ------------------------------------------------
+
+    if (
+      assignedMatch &&
+      assignedMatch.court_id !==
+        null &&
+      assignedMatch.court_id !==
+        undefined
+    ) {
+      console.log(
+        "[Open Play] Pending match automatically assigned",
+        {
+          sessionId:
+            competitionSessionId,
+
+          matchId:
+            pendingMatch.id,
+
+          courtId:
+            assignedMatch.court_id,
+        }
+      );
+
+      return assignedMatch;
+    }
+
+    return null;
+
+  } catch (error: any) {
+    console.log(
+      "[Open Play] Pending match still waiting for court",
+      {
+        sessionId:
+          competitionSessionId,
+
+        matchId:
+          pendingMatch.id,
+
+        error:
+          error?.message,
+      }
+    );
+
+    return null;
+  }
+}
 
 // ==================================================
 // CREATE MATCH FROM QUEUE
@@ -139,19 +273,18 @@ export async function createMatchFromQueue(
     );
   }
 
-
   // ==================================================
   // 2. SESSION MUST BE LIVE
   // ==================================================
 
   if (
-    session.status !== "live"
+    session.status !==
+    "live"
   ) {
     throw new Error(
       "Open Play session is not live"
     );
   }
-
 
   // ==================================================
   // 3. DETERMINE MATCH FORMAT
@@ -160,46 +293,51 @@ export async function createMatchFromQueue(
   const {
     playersPerTeam,
     totalPlayersPerMatch,
-    label: matchFormatLabel,
+    label:
+      matchFormatLabel,
   } =
     await getMatchFormat(
       session
     );
 
-
   // ==================================================
   // 4. DETERMINE PLAYERS
   // ==================================================
 
-  let teamAssignments: Array<{
-    team: "A" | "B";
-    queueId: number;
-    playerId: number;
-    position: number;
-  }>;
-
+  let teamAssignments:
+    Array<{
+      team: "A" | "B";
+      queueId: number;
+      playerId: number;
+      position: number;
+    }>;
 
   // ==================================================
   // MANUAL TEAM SELECTION
   // ==================================================
 
   if (
-    teamAQueueIds !== undefined ||
-    teamBQueueIds !== undefined
+    teamAQueueIds !==
+      undefined ||
+    teamBQueueIds !==
+      undefined
   ) {
     // ------------------------------------------------
     // Validate arrays
     // ------------------------------------------------
 
     if (
-      !Array.isArray(teamAQueueIds) ||
-      !Array.isArray(teamBQueueIds)
+      !Array.isArray(
+        teamAQueueIds
+      ) ||
+      !Array.isArray(
+        teamBQueueIds
+      )
     ) {
       throw new Error(
         "Team A and Team B selections are required"
       );
     }
-
 
     // ------------------------------------------------
     // Validate number of players
@@ -213,13 +351,13 @@ export async function createMatchFromQueue(
     ) {
       throw new Error(
         `Team A and Team B must each contain exactly ${playersPerTeam} player${
-          playersPerTeam === 1
+          playersPerTeam ===
+          1
             ? ""
             : "s"
         }`
       );
     }
-
 
     // ------------------------------------------------
     // Convert IDs to numbers
@@ -230,7 +368,6 @@ export async function createMatchFromQueue(
       ...teamBQueueIds,
     ].map(Number);
 
-
     // ------------------------------------------------
     // Validate IDs
     // ------------------------------------------------
@@ -238,7 +375,9 @@ export async function createMatchFromQueue(
     if (
       selectedIds.some(
         (id) =>
-          !Number.isInteger(id) ||
+          !Number.isInteger(
+            id
+          ) ||
           id <= 0
       )
     ) {
@@ -247,20 +386,20 @@ export async function createMatchFromQueue(
       );
     }
 
-
     // ------------------------------------------------
     // Prevent same player in both teams
     // ------------------------------------------------
 
     if (
-      new Set(selectedIds).size !==
+      new Set(
+        selectedIds
+      ).size !==
       totalPlayersPerMatch
     ) {
       throw new Error(
         "A player cannot be assigned to both teams"
       );
     }
-
 
     // ------------------------------------------------
     // Get queue entries
@@ -276,14 +415,14 @@ export async function createMatchFromQueue(
         )
       );
 
-
     // ------------------------------------------------
     // Validate queue entries
     // ------------------------------------------------
 
     if (
       selectedEntries.some(
-        (entry) => !entry
+        (entry) =>
+          !entry
       )
     ) {
       throw new Error(
@@ -291,18 +430,17 @@ export async function createMatchFromQueue(
       );
     }
 
-
     // ------------------------------------------------
     // Validate each player
     // ------------------------------------------------
 
     for (
-      const entry of selectedEntries
+      const entry of
+        selectedEntries
     ) {
       if (!entry) {
         continue;
       }
-
 
       // ----------------------------------------------
       // Correct session
@@ -321,19 +459,18 @@ export async function createMatchFromQueue(
         );
       }
 
-
       // ----------------------------------------------
       // Must still be waiting
       // ----------------------------------------------
 
       if (
-        entry.status !== "waiting"
+        entry.status !==
+        "waiting"
       ) {
         throw new Error(
           "Only waiting players can be added to a new match"
         );
       }
-
 
       // ----------------------------------------------
       // Competition player required
@@ -348,7 +485,6 @@ export async function createMatchFromQueue(
       }
     }
 
-
     // ------------------------------------------------
     // Map queue entries
     // ------------------------------------------------
@@ -358,13 +494,16 @@ export async function createMatchFromQueue(
         selectedEntries
           .filter(Boolean)
           .map(
-            (entry: any) => [
-              Number(entry.id),
+            (
+              entry: any
+            ) => [
+              Number(
+                entry.id
+              ),
               entry,
             ]
           )
       );
-
 
     // ------------------------------------------------
     // Team A
@@ -372,17 +511,25 @@ export async function createMatchFromQueue(
 
     teamAssignments = [
       ...teamAQueueIds.map(
-        (queueId, index) => {
+        (
+          queueId,
+          index
+        ) => {
           const entry =
             entryById.get(
-              Number(queueId)
+              Number(
+                queueId
+              )
             );
 
           return {
-            team: "A" as const,
+            team:
+              "A" as const,
 
             queueId:
-              Number(queueId),
+              Number(
+                queueId
+              ),
 
             playerId:
               Number(
@@ -395,23 +542,30 @@ export async function createMatchFromQueue(
         }
       ),
 
-
       // ------------------------------------------------
       // Team B
       // ------------------------------------------------
 
       ...teamBQueueIds.map(
-        (queueId, index) => {
+        (
+          queueId,
+          index
+        ) => {
           const entry =
             entryById.get(
-              Number(queueId)
+              Number(
+                queueId
+              )
             );
 
           return {
-            team: "B" as const,
+            team:
+              "B" as const,
 
             queueId:
-              Number(queueId),
+              Number(
+                queueId
+              ),
 
             playerId:
               Number(
@@ -426,7 +580,6 @@ export async function createMatchFromQueue(
     ];
   }
 
-
   // ==================================================
   // AUTOMATIC MATCH CREATION
   // ==================================================
@@ -437,7 +590,6 @@ export async function createMatchFromQueue(
         competitionSessionId,
         totalPlayersPerMatch
       );
-
 
     // ------------------------------------------------
     // Not enough players
@@ -452,9 +604,8 @@ export async function createMatchFromQueue(
       );
     }
 
-
-    teamAssignments = [];
-
+    teamAssignments =
+      [];
 
     // ------------------------------------------------
     // Automatically assign teams
@@ -462,22 +613,25 @@ export async function createMatchFromQueue(
 
     for (
       let index = 0;
-      index < totalPlayersPerMatch;
+      index <
+      totalPlayersPerMatch;
       index++
     ) {
       const team =
-        index < playersPerTeam
+        index <
+        playersPerTeam
           ? "A"
           : "B";
 
-
       const position =
-        (index % playersPerTeam) + 1;
-
+        (index %
+          playersPerTeam) +
+        1;
 
       const player =
-        waitingPlayers[index];
-
+        waitingPlayers[
+          index
+        ];
 
       if (
         !player.competition_player_id
@@ -487,12 +641,13 @@ export async function createMatchFromQueue(
         );
       }
 
-
       teamAssignments.push({
         team,
 
         queueId:
-          Number(player.id),
+          Number(
+            player.id
+          ),
 
         playerId:
           Number(
@@ -504,7 +659,6 @@ export async function createMatchFromQueue(
     }
   }
 
-
   // ==================================================
   // 5. CREATE MATCH NUMBER
   // ==================================================
@@ -513,7 +667,6 @@ export async function createMatchFromQueue(
     await getNextMatchNumber(
       competitionSessionId
     );
-
 
   // ==================================================
   // 6. CREATE MATCH
@@ -525,13 +678,13 @@ export async function createMatchFromQueue(
       matchNumber
     );
 
-
   // ==================================================
   // 7. ADD PLAYERS
   // ==================================================
 
   for (
-    const assignment of teamAssignments
+    const assignment of
+      teamAssignments
   ) {
     await addMatchPlayer(
       matchId,
@@ -540,16 +693,14 @@ export async function createMatchFromQueue(
       assignment.position
     );
 
-
     await updateQueueStatus(
       assignment.queueId,
       "matched"
     );
   }
 
-
   // ==================================================
-  // 8. ASSIGN AVAILABLE COURT
+  // 8. AUTOMATIC COURT ASSIGNMENT
   // ==================================================
 
   let createdMatch =
@@ -557,38 +708,34 @@ export async function createMatchFromQueue(
       matchId
     );
 
-
   try {
     createdMatch =
       await assignAvailableCourt(
-        Number(matchId)
+        Number(
+          matchId
+        )
       );
+
   } catch (error: any) {
     // ------------------------------------------------
     // No court available.
     //
-    // Keep the match pending.
-    //
-    // It can be assigned a court later.
+    // Keep match pending.
     // ------------------------------------------------
 
     console.log(
-      "No court available for match:",
+      "[Open Play] No court available for match:",
       matchId,
       error?.message
     );
 
-
-    // ------------------------------------------------
-    // Get latest match state
-    // ------------------------------------------------
-
     createdMatch =
       await findMatchById(
-        Number(matchId)
+        Number(
+          matchId
+        )
       );
   }
-
 
   // ==================================================
   // 9. RETURN CREATED MATCH
@@ -596,7 +743,6 @@ export async function createMatchFromQueue(
 
   return createdMatch;
 }
-
 
 // ==================================================
 // GET ONE MATCH
@@ -606,8 +752,9 @@ export async function getMatch(
   id: number
 ) {
   const match =
-    await findMatchById(id);
-
+    await findMatchById(
+      id
+    );
 
   if (!match) {
     throw new Error(
@@ -615,10 +762,8 @@ export async function getMatch(
     );
   }
 
-
   return match;
 }
-
 
 // ==================================================
 // GET MATCHES BY SESSION
@@ -632,19 +777,16 @@ export async function getSessionMatches(
       competitionSessionId
     );
 
-
   if (!session) {
     throw new Error(
       "Open Play session not found"
     );
   }
 
-
   return findMatchesBySessionId(
     competitionSessionId
   );
 }
-
 
 // ==================================================
 // UPDATE MATCH STATUS
@@ -655,15 +797,15 @@ export async function updateMatch(
   data: UpdateMatchStatusInput
 ) {
   const match =
-    await findMatchById(id);
-
+    await findMatchById(
+      id
+    );
 
   if (!match) {
     throw new Error(
       "Match not found"
     );
   }
-
 
   // ==================================================
   // VALIDATE STATUS
@@ -679,7 +821,6 @@ export async function updateMatch(
     );
   }
 
-
   // ==================================================
   // SAME STATUS
   // ==================================================
@@ -690,7 +831,6 @@ export async function updateMatch(
   ) {
     return match;
   }
-
 
   // ==================================================
   // COMPLETED PROTECTION
@@ -705,7 +845,6 @@ export async function updateMatch(
     );
   }
 
-
   // ==================================================
   // CANCELLED PROTECTION
   // ==================================================
@@ -718,7 +857,6 @@ export async function updateMatch(
       "Cancelled match cannot be restarted"
     );
   }
-
 
   // ==================================================
   // START PLAYING
@@ -741,7 +879,6 @@ export async function updateMatch(
       );
     }
 
-
     // ------------------------------------------------
     // Court required
     // ------------------------------------------------
@@ -755,10 +892,10 @@ export async function updateMatch(
       );
     }
 
-
-    return startMatch(id);
+    return startMatch(
+      id
+    );
   }
-
 
   // ==================================================
   // COMPLETED
@@ -773,7 +910,6 @@ export async function updateMatch(
     );
   }
 
-
   // ==================================================
   // OTHER STATUSES
   // ==================================================
@@ -784,7 +920,6 @@ export async function updateMatch(
   );
 }
 
-
 // ==================================================
 // START MATCH
 // ==================================================
@@ -793,15 +928,15 @@ export async function startMatchPlay(
   id: number
 ) {
   const match =
-    await findMatchById(id);
-
+    await findMatchById(
+      id
+    );
 
   if (!match) {
     throw new Error(
       "Match not found"
     );
   }
-
 
   // ==================================================
   // MUST BE CALLED
@@ -816,7 +951,6 @@ export async function startMatchPlay(
     );
   }
 
-
   // ==================================================
   // COURT REQUIRED
   // ==================================================
@@ -830,14 +964,14 @@ export async function startMatchPlay(
     );
   }
 
-
   // ==================================================
   // START MATCH
   // ==================================================
 
-  return startMatch(id);
+  return startMatch(
+    id
+  );
 }
-
 
 // ==================================================
 // COMPLETE MATCH
@@ -848,9 +982,14 @@ export async function finishMatch(
   teamAScore: number,
   teamBScore: number
 ) {
-  const match =
-    await findMatchById(id);
+  // ==================================================
+  // 1. FIND MATCH
+  // ==================================================
 
+  const match =
+    await findMatchById(
+      id
+    );
 
   if (!match) {
     throw new Error(
@@ -858,9 +997,8 @@ export async function finishMatch(
     );
   }
 
-
   // ==================================================
-  // 1. MUST BE PLAYING
+  // 2. MUST BE PLAYING
   // ==================================================
 
   if (
@@ -872,9 +1010,8 @@ export async function finishMatch(
     );
   }
 
-
   // ==================================================
-  // 2. VALIDATE SCORES
+  // 3. VALIDATE SCORES
   // ==================================================
 
   if (
@@ -890,9 +1027,8 @@ export async function finishMatch(
     );
   }
 
-
   // ==================================================
-  // 3. NO NEGATIVE SCORES
+  // 4. NO NEGATIVE SCORES
   // ==================================================
 
   if (
@@ -904,9 +1040,8 @@ export async function finishMatch(
     );
   }
 
-
   // ==================================================
-  // 4. NO TIE
+  // 5. NO TIE
   // ==================================================
 
   if (
@@ -918,9 +1053,8 @@ export async function finishMatch(
     );
   }
 
-
   // ==================================================
-  // 5. SAVE COMPLETED MATCH
+  // 6. SAVE COMPLETED MATCH
   // ==================================================
 
   const completedMatch =
@@ -930,16 +1064,14 @@ export async function finishMatch(
       teamBScore
     );
 
-
   // ==================================================
-  // 6. GET SESSION
+  // 7. GET SESSION
   // ==================================================
 
   const session =
     await findSessionById(
       match.competition_session_id
     );
-
 
   // ==================================================
   // SESSION NO LONGER LIVE
@@ -959,9 +1091,43 @@ export async function finishMatch(
     };
   }
 
+  // ==================================================
+  // 8. FIRST:
+  // ASSIGN COURT TO EXISTING PENDING MATCH
+  // ==================================================
+  //
+  // This is the important new behavior.
+  //
+  // The court from the completed match is now free.
+  //
+  // Before creating another match, check whether
+  // there is already a pending match waiting.
+  //
+  // ==================================================
+
+  let nextMatch =
+    await assignPendingMatchCourt(
+      match.competition_session_id
+    );
 
   // ==================================================
-  // 7. DETERMINE MATCH FORMAT
+  // 9. EXISTING PENDING MATCH ASSIGNED
+  // ==================================================
+
+  if (
+    nextMatch
+  ) {
+    return {
+      completed_match:
+        completedMatch,
+
+      next_match:
+        nextMatch,
+    };
+  }
+
+  // ==================================================
+  // 10. DETERMINE MATCH FORMAT
   // ==================================================
 
   const {
@@ -971,9 +1137,8 @@ export async function finishMatch(
       session
     );
 
-
   // ==================================================
-  // 8. CHECK WAITING PLAYERS
+  // 11. CHECK WAITING PLAYERS
   // ==================================================
 
   const waitingPlayers =
@@ -982,9 +1147,8 @@ export async function finishMatch(
       totalPlayersPerMatch
     );
 
-
   // ==================================================
-  // NOT ENOUGH PLAYERS
+  // 12. NOT ENOUGH PLAYERS
   // ==================================================
 
   if (
@@ -1000,16 +1164,14 @@ export async function finishMatch(
     };
   }
 
-
   // ==================================================
-  // 9. CREATE NEXT MATCH
+  // 13. CREATE NEXT MATCH
   // ==================================================
 
-  let nextMatch =
+  nextMatch =
     await createMatchFromQueue(
       match.competition_session_id
     );
-
 
   if (!nextMatch) {
     return {
@@ -1021,50 +1183,52 @@ export async function finishMatch(
     };
   }
 
-
   // ==================================================
-  // 10. COURT ASSIGNMENT
+  // 14. VERIFY COURT
+  //
+  // createMatchFromQueue() already attempts
+  // automatic court allocation.
   // ==================================================
-
-  // createMatchFromQueue() already attempts to
-  // assign an available court.
-  //
-  // We still verify the latest state here.
-  //
-  // This is intentionally defensive.
 
   if (
     nextMatch.court_id ===
-    null
+      null ||
+    nextMatch.court_id ===
+      undefined
   ) {
     try {
       nextMatch =
         await assignAvailableCourt(
-          Number(nextMatch.id)
+          Number(
+            nextMatch.id
+          )
         );
-    } catch (error: any) {
-      // ------------------------------------------------
-      // No court available.
-      // Keep pending.
-      // ------------------------------------------------
 
+    } catch (
+      error: any
+    ) {
       console.log(
-        "No court available for next Open Play match:",
-        nextMatch.id,
-        error?.message
-      );
+        "[Open Play] No court available for new match",
+        {
+          matchId:
+            nextMatch.id,
 
+          error:
+            error?.message,
+        }
+      );
 
       nextMatch =
         await findMatchById(
-          Number(nextMatch.id)
+          Number(
+            nextMatch.id
+          )
         );
     }
   }
 
-
   // ==================================================
-  // 11. RETURN BOTH MATCHES
+  // 15. RETURN BOTH MATCHES
   // ==================================================
 
   return {

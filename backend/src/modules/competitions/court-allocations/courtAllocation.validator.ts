@@ -1,59 +1,67 @@
 import { z } from "zod";
 
 // ==================================================
-// CREATE
+// COURT ALLOCATION TYPES
+// ==================================================
+
+export type CourtAllocationType =
+  | "open_play"
+  | "tournament";
+
+export type CourtAllocationStatus =
+  | "reserved"
+  | "released"
+  | "cancelled";
+
+// ==================================================
+// CREATE VALIDATION
 // ==================================================
 
 export const createCourtAllocationSchema =
   z.object({
-    competition_id: z
+    competition_division_id: z.coerce
       .number()
       .int()
-      .positive(),
+      .positive(
+        "Competition division is required."
+      ),
 
-    competition_division_id:
-      z
-        .number()
-        .int()
-        .positive()
-        .nullable()
-        .optional(),
-
-    court_id: z
+    court_id: z.coerce
       .number()
       .int()
-      .positive(),
+      .positive(
+        "Court is required."
+      ),
 
     allocation_date: z
       .string()
-      .regex(
-        /^\d{4}-\d{2}-\d{2}$/,
-        "Allocation date must be YYYY-MM-DD."
+      .min(
+        1,
+        "Allocation date is required."
       ),
 
     start_time: z
       .string()
       .regex(
-        /^\d{2}:\d{2}$/,
-        "Start time must be HH:mm."
+        /^([01]\d|2[0-3]):([0-5]\d)$/,
+        "Invalid start time. Use HH:mm."
       ),
 
     end_time: z
       .string()
       .regex(
-        /^\d{2}:\d{2}$/,
-        "End time must be HH:mm."
+        /^([01]\d|2[0-3]):([0-5]\d)$/,
+        "Invalid end time. Use HH:mm."
       ),
 
-    allocation_type: z
-      .enum([
-        "open_play",
-        "tournament",
-      ]),
+    allocation_type: z.enum([
+      "open_play",
+      "tournament",
+    ]),
   });
 
 // ==================================================
-// UPDATE
+// UPDATE VALIDATION
 // ==================================================
 
 export const updateCourtAllocationSchema =
@@ -61,16 +69,16 @@ export const updateCourtAllocationSchema =
     start_time: z
       .string()
       .regex(
-        /^\d{2}:\d{2}$/,
-        "Start time must be HH:mm."
+        /^([01]\d|2[0-3]):([0-5]\d)$/,
+        "Invalid start time. Use HH:mm."
       )
       .optional(),
 
     end_time: z
       .string()
       .regex(
-        /^\d{2}:\d{2}$/,
-        "End time must be HH:mm."
+        /^([01]\d|2[0-3]):([0-5]\d)$/,
+        "Invalid end time. Use HH:mm."
       )
       .optional(),
 
@@ -78,20 +86,60 @@ export const updateCourtAllocationSchema =
       .enum([
         "reserved",
         "released",
+        "cancelled",
       ])
       .optional(),
   });
 
 // ==================================================
-// TYPES
+// DATABASE / SERVICE INPUT
 // ==================================================
+//
+// competition_id is NOT accepted from req.body.
+// The controller gets it from req.params.competitionId.
+//
+// Therefore:
+// 1. Zod validates the body.
+// 2. Controller adds competition_id.
+// 3. Service/repository receives the complete object.
+//
 
 export type CreateCourtAllocationInput =
   z.infer<
     typeof createCourtAllocationSchema
-  >;
+  > & {
+    competition_id: number;
+  };
 
 export type UpdateCourtAllocationInput =
   z.infer<
     typeof updateCourtAllocationSchema
   >;
+
+// ==================================================
+// COURT ALLOCATION RESPONSE
+// ==================================================
+
+export interface CourtAllocation {
+  id: number;
+
+  competition_id: number;
+
+  competition_division_id: number;
+
+  court_id: number;
+
+  allocation_date: string;
+
+  start_time: string;
+
+  end_time: string;
+
+  allocation_type: CourtAllocationType;
+
+  status: CourtAllocationStatus;
+
+  created_at: Date;
+
+  updated_at: Date;
+}

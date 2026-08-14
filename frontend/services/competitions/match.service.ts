@@ -26,8 +26,15 @@ export interface MatchPlayer {
 export interface OpenPlayMatch {
   id: number;
   competition_session_id: number;
+
+  // -----------------------------------------------
+  // COURT
+  // -----------------------------------------------
+
   court_id: number | null;
+  court_name?: string | null;
   court_assigned_at?: string | null;
+
   match_number: number;
 
   status: MatchStatus;
@@ -53,6 +60,8 @@ interface ApiResponse<T> {
 export const matchService = {
   // -----------------------------------------------
   // CREATE MATCH FROM QUEUE
+  //
+  // Backend will automatically allocate a court.
   // -----------------------------------------------
 
   async create(
@@ -160,4 +169,4 @@ export const matchService = {
 
     return response.data.data;
   },
-};
+};createMatchFromQueue

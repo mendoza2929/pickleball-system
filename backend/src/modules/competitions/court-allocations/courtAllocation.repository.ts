@@ -52,6 +52,38 @@ export class CourtAllocationRepository {
   }
 
   // ==================================================
+  // GET DIVISION
+  // ==================================================
+
+  async findDivisionById(
+    divisionId: number,
+    competitionId: number
+  ) {
+    /*
+     * If your table uses a different display-name column,
+     * keep only id and competition_id here.
+     */
+    const [rows]: any =
+      await pool.query(
+        `
+        SELECT
+          id,
+          competition_id
+        FROM competition_divisions
+        WHERE id = ?
+          AND competition_id = ?
+        LIMIT 1
+        `,
+        [
+          divisionId,
+          competitionId,
+        ]
+      );
+
+    return rows[0] ?? null;
+  }
+
+  // ==================================================
   // GET AVAILABLE COURTS
   // ==================================================
 
@@ -61,20 +93,6 @@ export class CourtAllocationRepository {
     startTime: string,
     endTime: string
   ) {
-    /*
-     * competitionId is intentionally accepted here
-     * so the availability request belongs to the
-     * current competition.
-     *
-     * The actual court availability is determined by:
-     *
-     * 1. Court is Available
-     * 2. Court is not deleted
-     * 3. Court has an open schedule on this weekday
-     * 4. Court has no existing competition allocation
-     *    overlapping this period
-     */
-
     void competitionId;
 
     const [rows]: any =
@@ -95,34 +113,21 @@ export class CourtAllocationRepository {
 
           AND EXISTS (
             SELECT 1
-
             FROM court_schedules cs
-
             WHERE cs.court_id = c.id
-
-              AND cs.day_of_week =
-                DAYNAME(?)
-
+              AND cs.day_of_week = DAYNAME(?)
               AND cs.is_closed = 0
-
               AND cs.open_time <= ?
-
               AND cs.close_time >= ?
           )
 
           AND NOT EXISTS (
             SELECT 1
-
             FROM competition_court_allocations cca
-
             WHERE cca.court_id = c.id
-
               AND cca.allocation_date = ?
-
               AND cca.status = 'reserved'
-
               AND cca.start_time < ?
-
               AND cca.end_time > ?
           )
 
@@ -133,7 +138,6 @@ export class CourtAllocationRepository {
           allocationDate,
           startTime,
           endTime,
-
           allocationDate,
           endTime,
           startTime,
@@ -316,18 +320,11 @@ export class CourtAllocationRepository {
         `,
         [
           data.competition_id,
-
-          data.competition_division_id ??
-            null,
-
+          data.competition_division_id,
           data.court_id,
-
           data.allocation_date,
-
           data.start_time,
-
           data.end_time,
-
           data.allocation_type,
         ]
       );

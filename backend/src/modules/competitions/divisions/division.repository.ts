@@ -26,26 +26,47 @@ export async function findDivisionsByCompetitionId(
         cd.created_at,
         cd.updated_at,
 
-        /*
-         * ONLY CHECKED-IN PLAYERS COUNT
-         * TOWARD THE DIVISION CAPACITY.
+        /* ==================================================
+         * CONFIRMED REGISTRATIONS
          *
-         * pending registration       = does not count
-         * confirmed registration     = does not count
-         * confirmed + checked_in     = counts
-         * no_show                    = does not count
-         * cancelled check-in        = does not count
-         */
+         * This is what counts toward division capacity.
+         *
+         * pending   = does NOT count
+         * confirmed = COUNTS
+         * cancelled = does NOT count
+         *
+         * Check-in status is intentionally NOT used here.
+         * ================================================== */
+
         COUNT(
-          CASE
+          DISTINCT CASE
+            WHEN cr.status = 'confirmed'
+            THEN cr.id
+          END
+        ) AS confirmed_players,
+
+        /* ==================================================
+         * CHECKED-IN PLAYERS
+         *
+         * Kept separately for check-in statistics.
+         * This does NOT determine remaining slots.
+         * ================================================== */
+
+        COUNT(
+          DISTINCT CASE
             WHEN cc.status = 'checked_in'
             THEN cc.id
           END
         ) AS checked_in_players,
 
-        /*
-         * Remaining slots
-         */
+        /* ==================================================
+         * REMAINING SLOTS
+         *
+         * IMPORTANT:
+         * Remaining capacity is based on CONFIRMED
+         * registrations, NOT check-ins.
+         * ================================================== */
+
         CASE
           WHEN cd.max_players IS NULL
           THEN NULL
@@ -53,9 +74,9 @@ export async function findDivisionsByCompetitionId(
           ELSE GREATEST(
             cd.max_players -
             COUNT(
-              CASE
-                WHEN cc.status = 'checked_in'
-                THEN cc.id
+              DISTINCT CASE
+                WHEN cr.status = 'confirmed'
+                THEN cr.id
               END
             ),
             0
@@ -89,20 +110,44 @@ export async function findDivisionsByCompetitionId(
     [competitionId]
   );
 
-  return (rows as any[]).map((division) => ({
-    ...division,
+  return (rows as any[]).map(
+    (division) => ({
+      ...division,
 
-    checked_in_players: Number(
-      division.checked_in_players ?? 0
-    ),
+      // -----------------------------------------------
+      // CONFIRMED REGISTRATIONS
+      // -----------------------------------------------
 
-    remaining_slots:
-      division.remaining_slots === null
-        ? null
-        : Number(
-            division.remaining_slots
-          ),
-  }));
+      confirmed_players:
+        Number(
+          division.confirmed_players ?? 0
+        ),
+
+      // -----------------------------------------------
+      // CHECKED-IN PLAYERS
+      //
+      // This remains separate.
+      // -----------------------------------------------
+
+      checked_in_players:
+        Number(
+          division.checked_in_players ?? 0
+        ),
+
+      // -----------------------------------------------
+      // REMAINING SLOTS
+      //
+      // Based on confirmed registrations.
+      // -----------------------------------------------
+
+      remaining_slots:
+        division.remaining_slots === null
+          ? null
+          : Number(
+              division.remaining_slots
+            ),
+    })
+  );
 }
 
 // ==================================================
@@ -126,12 +171,35 @@ export async function findDivisionById(
         cd.created_at,
         cd.updated_at,
 
+        /* ==================================================
+         * CONFIRMED REGISTRATIONS
+         * ================================================== */
+
         COUNT(
-          CASE
+          DISTINCT CASE
+            WHEN cr.status = 'confirmed'
+            THEN cr.id
+          END
+        ) AS confirmed_players,
+
+        /* ==================================================
+         * CHECKED-IN PLAYERS
+         *
+         * Separate from capacity.
+         * ================================================== */
+
+        COUNT(
+          DISTINCT CASE
             WHEN cc.status = 'checked_in'
             THEN cc.id
           END
         ) AS checked_in_players,
+
+        /* ==================================================
+         * REMAINING SLOTS
+         *
+         * Based on CONFIRMED registrations.
+         * ================================================== */
 
         CASE
           WHEN cd.max_players IS NULL
@@ -140,9 +208,9 @@ export async function findDivisionById(
           ELSE GREATEST(
             cd.max_players -
             COUNT(
-              CASE
-                WHEN cc.status = 'checked_in'
-                THEN cc.id
+              DISTINCT CASE
+                WHEN cr.status = 'confirmed'
+                THEN cr.id
               END
             ),
             0
@@ -187,9 +255,27 @@ export async function findDivisionById(
   return {
     ...division,
 
-    checked_in_players: Number(
-      division.checked_in_players ?? 0
-    ),
+    // -----------------------------------------------
+    // CONFIRMED
+    // -----------------------------------------------
+
+    confirmed_players:
+      Number(
+        division.confirmed_players ?? 0
+      ),
+
+    // -----------------------------------------------
+    // CHECKED-IN
+    // -----------------------------------------------
+
+    checked_in_players:
+      Number(
+        division.checked_in_players ?? 0
+      ),
+
+    // -----------------------------------------------
+    // REMAINING
+    // -----------------------------------------------
 
     remaining_slots:
       division.remaining_slots === null
@@ -219,6 +305,7 @@ export async function createDivision(
           entry_fee,
           status
         )
+
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
       [
@@ -250,35 +337,74 @@ export async function updateDivision(
 
   if (data.name !== undefined) {
     fields.push("name = ?");
-    values.push(data.name.trim());
+    values.push(
+      data.name.trim()
+    );
   }
 
-  if (data.skillLevel !== undefined) {
-    fields.push("skill_level = ?");
-    values.push(data.skillLevel);
+  if (
+    data.skillLevel !== undefined
+  ) {
+    fields.push(
+      "skill_level = ?"
+    );
+
+    values.push(
+      data.skillLevel
+    );
   }
 
-  if (data.format !== undefined) {
-    fields.push("format = ?");
-    values.push(data.format);
+  if (
+    data.format !== undefined
+  ) {
+    fields.push(
+      "format = ?"
+    );
+
+    values.push(
+      data.format
+    );
   }
 
-  if (data.maxPlayers !== undefined) {
-    fields.push("max_players = ?");
-    values.push(data.maxPlayers);
+  if (
+    data.maxPlayers !== undefined
+  ) {
+    fields.push(
+      "max_players = ?"
+    );
+
+    values.push(
+      data.maxPlayers
+    );
   }
 
-  if (data.entryFee !== undefined) {
-    fields.push("entry_fee = ?");
-    values.push(data.entryFee);
+  if (
+    data.entryFee !== undefined
+  ) {
+    fields.push(
+      "entry_fee = ?"
+    );
+
+    values.push(
+      data.entryFee
+    );
   }
 
-  if (data.status !== undefined) {
-    fields.push("status = ?");
-    values.push(data.status);
+  if (
+    data.status !== undefined
+  ) {
+    fields.push(
+      "status = ?"
+    );
+
+    values.push(
+      data.status
+    );
   }
 
-  if (fields.length === 0) {
+  if (
+    fields.length === 0
+  ) {
     return findDivisionById(id);
   }
 
@@ -287,7 +413,10 @@ export async function updateDivision(
   await db.execute(
     `
       UPDATE competition_divisions
-      SET ${fields.join(", ")}
+
+      SET
+        ${fields.join(", ")}
+
       WHERE id = ?
     `,
     values

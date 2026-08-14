@@ -61,12 +61,6 @@ export class CourtAllocationController {
       req: Request,
       res: Response
     ) => {
-      // IMPORTANT:
-      // competitionId comes from the parent route.
-      //
-      // /api/competitions/:competitionId/
-      // court-allocations/available
-
       const competitionId = Number(
         req.params.competitionId
       );
@@ -139,7 +133,8 @@ export class CourtAllocationController {
       ) {
         return res.status(400).json({
           success: false,
-          message: "Invalid allocation ID.",
+          message:
+            "Invalid allocation ID.",
         });
       }
 
@@ -164,10 +159,6 @@ export class CourtAllocationController {
       req: Request,
       res: Response
     ) => {
-      // IMPORTANT:
-      // Do NOT trust competition_id
-      // from request body.
-
       const competitionId = Number(
         req.params.competitionId
       );

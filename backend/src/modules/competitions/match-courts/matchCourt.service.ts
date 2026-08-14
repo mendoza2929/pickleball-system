@@ -18,14 +18,12 @@ import {
   timeToMinutes,
 } from "../../../shared/utils/time";
 
-
 // ==================================================
 // AVAILABILITY SERVICE
 // ==================================================
 
 const availabilityService =
   new AvailabilityService();
-
 
 // ==================================================
 // APPLICATION TIMEZONE
@@ -34,7 +32,6 @@ const availabilityService =
 const APP_TIMEZONE =
   process.env.APP_TIMEZONE ||
   "Asia/Manila";
-
 
 // ==================================================
 // CURRENT DATE
@@ -49,9 +46,7 @@ function getCurrentDate(): string {
           APP_TIMEZONE,
 
         year: "numeric",
-
         month: "2-digit",
-
         day: "2-digit",
       }
     );
@@ -60,7 +55,6 @@ function getCurrentDate(): string {
     new Date()
   );
 }
-
 
 // ==================================================
 // CURRENT TIME
@@ -75,9 +69,7 @@ function getCurrentTime(): string {
           APP_TIMEZONE,
 
         hour: "2-digit",
-
         minute: "2-digit",
-
         hour12: false,
       }
     );
@@ -86,7 +78,6 @@ function getCurrentTime(): string {
     new Date()
   );
 }
-
 
 // ==================================================
 // CHECK COURT ACTIVE MATCH
@@ -109,7 +100,6 @@ async function ensureCourtIsFree(
   }
 }
 
-
 // ==================================================
 // FIND AVAILABLE COURT
 // ==================================================
@@ -118,9 +108,9 @@ export async function findAvailableCourt(
   reservationDate: string,
   startTime: string
 ) {
-  // -----------------------------------------------
-  // Get all available courts
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // Get all courts that are generally available
+  // ------------------------------------------------
 
   const courts =
     await availabilityService
@@ -136,10 +126,6 @@ export async function findAvailableCourt(
 
     return null;
   }
-
-  // -----------------------------------------------
-  // Convert current time to minutes
-  // -----------------------------------------------
 
   const currentMinutes =
     timeToMinutes(
@@ -159,9 +145,9 @@ export async function findAvailableCourt(
     }
   );
 
-  // -----------------------------------------------
-  // Check each court
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // Check every available court
+  // ------------------------------------------------
 
   for (
     const court of courts
@@ -179,9 +165,9 @@ export async function findAvailableCourt(
     }
 
     try {
-      // -------------------------------------------
-      // Get complete availability
-      // -------------------------------------------
+      // ----------------------------------------------
+      // Get today's availability
+      // ----------------------------------------------
 
       const availability =
         await availabilityService
@@ -199,16 +185,9 @@ export async function findAvailableCourt(
         continue;
       }
 
-      // -------------------------------------------
-      // Find slot containing current time
-      //
-      // Example:
-      //
-      // current = 10:38
-      // slot    = 10:00 - 11:00
-      //
-      // 10:00 <= 10:38 < 11:00
-      // -------------------------------------------
+      // ----------------------------------------------
+      // Find current available slot
+      // ----------------------------------------------
 
       const currentSlot =
         availability.slots.find(
@@ -251,9 +230,9 @@ export async function findAvailableCourt(
         }
       );
 
-      // -------------------------------------------
-      // Court found
-      // -------------------------------------------
+      // ----------------------------------------------
+      // Court is currently available
+      // ----------------------------------------------
 
       if (currentSlot) {
         return court;
@@ -276,7 +255,6 @@ export async function findAvailableCourt(
   return null;
 }
 
-
 // ==================================================
 // AUTO ASSIGN AVAILABLE COURT
 // ==================================================
@@ -284,9 +262,9 @@ export async function findAvailableCourt(
 export async function assignAvailableCourt(
   matchId: number
 ) {
-  // -----------------------------------------------
-  // 1. Match
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 1. Get match
+  // ------------------------------------------------
 
   const match =
     await findMatchForAssignment(
@@ -299,9 +277,9 @@ export async function assignAvailableCourt(
     );
   }
 
-  // -----------------------------------------------
-  // 2. Must be pending
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 2. Match must be pending
+  // ------------------------------------------------
 
   if (
     match.status !== "pending"
@@ -311,22 +289,20 @@ export async function assignAvailableCourt(
     );
   }
 
-  // -----------------------------------------------
-  // 3. No existing court
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 3. Match must not already have court
+  // ------------------------------------------------
 
   if (
     match.court_id !== null &&
     match.court_id !== undefined
   ) {
-    throw new Error(
-      "A court is already assigned to this match"
-    );
+    return match;
   }
 
-  // -----------------------------------------------
-  // 4. Session
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 4. Get Open Play session
+  // ------------------------------------------------
 
   const session =
     await findSessionById(
@@ -341,9 +317,9 @@ export async function assignAvailableCourt(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 5. Session must be live
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   if (
     session.status !== "live"
@@ -353,9 +329,9 @@ export async function assignAvailableCourt(
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 6. Current Philippines date/time
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   const reservationDate =
     getCurrentDate();
@@ -374,9 +350,9 @@ export async function assignAvailableCourt(
     }
   );
 
-  // -----------------------------------------------
-  // 7. Find available court
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 7. Find court
+  // ------------------------------------------------
 
   const court =
     await findAvailableCourt(
@@ -384,9 +360,11 @@ export async function assignAvailableCourt(
       currentTime
     );
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 8. No court
-  // -----------------------------------------------
+  //
+  // Match remains pending.
+  // ------------------------------------------------
 
   if (!court) {
     console.log(
@@ -398,22 +376,32 @@ export async function assignAvailableCourt(
       }
     );
 
-    // Keep match pending.
     return findMatchForAssignment(
       matchId
     );
   }
 
-  // -----------------------------------------------
+  // ------------------------------------------------
   // 9. Court ID
-  // -----------------------------------------------
+  // ------------------------------------------------
 
   const courtId =
     Number(court.id);
 
-  // -----------------------------------------------
-  // 10. Verify court exists
-  // -----------------------------------------------
+  if (
+    !Number.isInteger(
+      courtId
+    ) ||
+    courtId <= 0
+  ) {
+    throw new Error(
+      "Invalid court selected"
+    );
+  }
+
+  // ------------------------------------------------
+  // 10. Verify court still exists
+  // ------------------------------------------------
 
   const currentCourt =
     await findCourtById(
@@ -426,31 +414,39 @@ export async function assignAvailableCourt(
     );
   }
 
-  // -----------------------------------------------
-  // 11. Verify status
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 11. Verify court status
+  // ------------------------------------------------
 
   if (
     currentCourt.status !==
     "Available"
   ) {
-    throw new Error(
-      "Selected court is no longer available"
+    console.log(
+      "[Open Play] Court became unavailable",
+      {
+        courtId,
+        matchId,
+      }
+    );
+
+    return findMatchForAssignment(
+      matchId
     );
   }
 
-  // -----------------------------------------------
-  // 12. Check Open Play usage
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 12. Check active Open Play match
+  // ------------------------------------------------
 
   await ensureCourtIsFree(
     courtId,
     matchId
   );
 
-  // -----------------------------------------------
-  // 13. Verify availability again
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 13. Verify availability one more time
+  // ------------------------------------------------
 
   const availability =
     await availabilityService
@@ -458,6 +454,17 @@ export async function assignAvailableCourt(
         courtId,
         reservationDate
       );
+
+  if (
+    !availability ||
+    !Array.isArray(
+      availability.slots
+    )
+  ) {
+    throw new Error(
+      "Unable to verify court availability"
+    );
+  }
 
   const currentMinutes =
     timeToMinutes(
@@ -496,14 +503,22 @@ export async function assignAvailableCourt(
     );
 
   if (!currentSlot) {
-    throw new Error(
-      "Selected court is no longer available"
+    console.log(
+      "[Open Play] Court is no longer available",
+      {
+        courtId,
+        matchId,
+      }
+    );
+
+    return findMatchForAssignment(
+      matchId
     );
   }
 
-  // -----------------------------------------------
-  // 14. Assign
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // 14. Assign court
+  // ------------------------------------------------
 
   const updatedMatch =
     await assignCourtToMatch(
@@ -532,7 +547,6 @@ export async function assignAvailableCourt(
   return updatedMatch;
 }
 
-
 // ==================================================
 // MANUAL COURT ASSIGNMENT
 // ==================================================
@@ -541,10 +555,6 @@ export async function assignCourt(
   matchId: number,
   courtId: number
 ) {
-  // -----------------------------------------------
-  // 1. Match
-  // -----------------------------------------------
-
   const match =
     await findMatchForAssignment(
       matchId
@@ -556,10 +566,6 @@ export async function assignCourt(
     );
   }
 
-  // -----------------------------------------------
-  // 2. Must be pending
-  // -----------------------------------------------
-
   if (
     match.status !== "pending"
   ) {
@@ -567,10 +573,6 @@ export async function assignCourt(
       `Match cannot be assigned a court while status is "${match.status}"`
     );
   }
-
-  // -----------------------------------------------
-  // 3. No existing court
-  // -----------------------------------------------
 
   if (
     match.court_id !== null &&
@@ -580,10 +582,6 @@ export async function assignCourt(
       "A court is already assigned to this match"
     );
   }
-
-  // -----------------------------------------------
-  // 4. Session
-  // -----------------------------------------------
 
   const session =
     await findSessionById(
@@ -598,10 +596,6 @@ export async function assignCourt(
     );
   }
 
-  // -----------------------------------------------
-  // 5. Session live
-  // -----------------------------------------------
-
   if (
     session.status !== "live"
   ) {
@@ -609,10 +603,6 @@ export async function assignCourt(
       "Open Play session is not live"
     );
   }
-
-  // -----------------------------------------------
-  // 6. Court
-  // -----------------------------------------------
 
   const court =
     await findCourtById(
@@ -626,26 +616,17 @@ export async function assignCourt(
   }
 
   if (
-    court.status !==
-    "Available"
+    court.status !== "Available"
   ) {
     throw new Error(
       "Court is not available"
     );
   }
 
-  // -----------------------------------------------
-  // 7. Check Open Play usage
-  // -----------------------------------------------
-
   await ensureCourtIsFree(
     courtId,
     matchId
   );
-
-  // -----------------------------------------------
-  // 8. Current date/time
-  // -----------------------------------------------
 
   const reservationDate =
     getCurrentDate();
@@ -653,21 +634,28 @@ export async function assignCourt(
   const currentTime =
     getCurrentTime();
 
-  const currentMinutes =
-    timeToMinutes(
-      currentTime
-    );
-
-  // -----------------------------------------------
-  // 9. Check availability
-  // -----------------------------------------------
-
   const availability =
     await availabilityService
       .getAvailability(
         courtId,
         reservationDate
       );
+
+  if (
+    !availability ||
+    !Array.isArray(
+      availability.slots
+    )
+  ) {
+    throw new Error(
+      "Unable to verify court availability"
+    );
+  }
+
+  const currentMinutes =
+    timeToMinutes(
+      currentTime
+    );
 
   const currentSlot =
     availability.slots.find(
@@ -706,25 +694,11 @@ export async function assignCourt(
     );
   }
 
-  // -----------------------------------------------
-  // 10. Assign
-  // -----------------------------------------------
-
-  const updatedMatch =
-    await assignCourtToMatch(
-      matchId,
-      courtId
-    );
-
-  if (!updatedMatch) {
-    throw new Error(
-      "Failed to assign court"
-    );
-  }
-
-  return updatedMatch;
+  return assignCourtToMatch(
+    matchId,
+    courtId
+  );
 }
-
 
 // ==================================================
 // REMOVE COURT
@@ -733,10 +707,6 @@ export async function assignCourt(
 export async function unassignCourt(
   matchId: number
 ) {
-  // -----------------------------------------------
-  // 1. Match
-  // -----------------------------------------------
-
   const match =
     await findMatchForAssignment(
       matchId
@@ -748,10 +718,6 @@ export async function unassignCourt(
     );
   }
 
-  // -----------------------------------------------
-  // 2. Cannot remove while playing
-  // -----------------------------------------------
-
   if (
     match.status === "playing"
   ) {
@@ -759,10 +725,6 @@ export async function unassignCourt(
       "Cannot remove court from a playing match"
     );
   }
-
-  // -----------------------------------------------
-  // 3. Completed is historical
-  // -----------------------------------------------
 
   if (
     match.status === "completed"
@@ -772,10 +734,6 @@ export async function unassignCourt(
     );
   }
 
-  // -----------------------------------------------
-  // 4. Must have court
-  // -----------------------------------------------
-
   if (
     match.court_id === null ||
     match.court_id === undefined
@@ -784,10 +742,6 @@ export async function unassignCourt(
       "Match does not have a court assigned"
     );
   }
-
-  // -----------------------------------------------
-  // 5. Remove
-  // -----------------------------------------------
 
   return removeCourtFromMatch(
     matchId

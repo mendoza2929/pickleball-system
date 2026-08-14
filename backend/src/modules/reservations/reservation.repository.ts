@@ -496,7 +496,11 @@ export class ReservationRepository {
           cust.phone
             AS customer_phone,
 
-          CASE
+         CASE
+            WHEN r.guest_name IS NOT NULL
+                AND TRIM(r.guest_name) != ''
+              THEN r.guest_name
+
             WHEN r.customer_id IS NOT NULL THEN
               CONCAT(
                 cust.first_name,
@@ -512,7 +516,7 @@ export class ReservationRepository {
               )
 
             ELSE
-              r.guest_name
+              NULL
           END AS player_name,
 
           (

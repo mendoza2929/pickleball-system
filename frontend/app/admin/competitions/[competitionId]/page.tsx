@@ -119,10 +119,12 @@ export default function CompetitionDetailsPage() {
     []
   );
 
+  // Court allocation is division-specific.
+  // An allocation for one division must never unlock another division.
   const [
-    hasCourtAllocation,
-    setHasCourtAllocation,
-  ] = useState(false);
+    divisionCourtAllocation,
+    setDivisionCourtAllocation,
+  ] = useState<Record<number, boolean>>({});
 
   const [
     allocationLoading,
@@ -200,8 +202,18 @@ export default function CompetitionDetailsPage() {
       // -----------------------------------------------
       // Court Allocation
       // -----------------------------------------------
+      //
+      // IMPORTANT:
+      // Do not rely on the divisions React state here.
+      // setDivisions() is asynchronous, so checkCourtAllocation()
+      // could otherwise receive the old empty divisions array.
+      //
+      // Pass the freshly loaded divisionData directly.
+      // -----------------------------------------------
 
-      await checkCourtAllocation();
+      await checkCourtAllocation(
+        divisionData
+      );
     } catch (error: any) {
       console.error(
         "Failed to load competition:",
@@ -221,7 +233,9 @@ export default function CompetitionDetailsPage() {
   // CHECK COURT ALLOCATION
   // ==================================================
 
- async function checkCourtAllocation() {
+ async function checkCourtAllocation(
+  currentDivisions: CompetitionDivision[]
+) {
   try {
     setAllocationLoading(true);
 
@@ -255,25 +269,57 @@ export default function CompetitionDetailsPage() {
     );
 
     // ==================================================
-    // ONLY RESERVED COUNTS
+    // BUILD DIVISION-SPECIFIC ALLOCATION MAP
+    // ==================================================
+    //
+    // IMPORTANT:
+    // An allocation belongs to the division stored in
+    // competition_division_id.
+    //
+    // Example:
+    //
+    // Mixed Doubles -> reserved -> true
+    // Men's Singles -> no allocation -> false
+    // Women's Singles -> no allocation -> false
+    //
+    // Therefore, allocating a court to Mixed Doubles
+    // cannot unlock Singles.
     // ==================================================
 
-    const hasReservedAllocation =
-      allocations.some(
-        (allocation) =>
-          String(
-            allocation.status
-          ).toLowerCase() ===
-          "reserved"
-      );
+    const allocationMap: Record<number, boolean> = {};
+
+    for (const division of currentDivisions) {
+      allocationMap[division.id] =
+        allocations.some(
+          (allocation) =>
+            allocation.competition_division_id !== null &&
+            Number(
+              allocation.competition_division_id
+            ) === Number(division.id) &&
+            ["reserved", "active"].includes(
+              String(
+                allocation.status
+              ).trim().toLowerCase()
+            )
+        );
+    }
 
     console.log(
-      "[Court Allocation] Has reserved allocation:",
-      hasReservedAllocation
+      "[Court Allocation] Division allocation map:",
+      allocationMap
     );
 
-    setHasCourtAllocation(
-      hasReservedAllocation
+    console.table(
+      currentDivisions.map((division) => ({
+        divisionId: division.id,
+        divisionName: division.name,
+        hasAllocation:
+          allocationMap[division.id] === true,
+      }))
+    );
+
+    setDivisionCourtAllocation(
+      allocationMap
     );
   } catch (error) {
     console.error(
@@ -281,42 +327,65 @@ export default function CompetitionDetailsPage() {
       error
     );
 
-    setHasCourtAllocation(false);
+    setDivisionCourtAllocation({});
   } finally {
     setAllocationLoading(false);
   }
 }
-  // ==================================================
+
+
+// ==================================================
   // HANDLE OPEN PLAY
   // ==================================================
 
   function handleOpenPlay(
-    divisionId: number
-  ) {
-    // ==================================================
-    // NO COURT ALLOCATION
-    // ==================================================
-
-    if (
-      !hasCourtAllocation
-    ) {
-      router.push(
-        `/admin/competitions/${competitionId}/court-allocation`
-      );
-
-      return;
-    }
-
-    // ==================================================
-    // COURT ALLOCATION EXISTS
-    // ==================================================
-
-    router.push(
-      `/admin/competitions/${competitionId}/divisions/${divisionId}/open-play`
+  divisionId: number
+) {
+  const hasAllocationForDivision =
+    Boolean(
+      divisionCourtAllocation[divisionId]
     );
+
+  console.log(
+    "[Court Allocation] Opening division:",
+    {
+      competitionId,
+      divisionId,
+      hasAllocationForDivision,
+    }
+  );
+
+  // ==================================================
+  // NO COURT ALLOCATION FOR THIS DIVISION
+  // ==================================================
+  //
+  // A court allocation belonging to another division
+  // does NOT count.
+  //
+  // Pass the selected division ID to the allocation page
+  // so that page can allocate courts specifically for
+  // this division.
+  // ==================================================
+
+  if (!hasAllocationForDivision) {
+    router.push(
+      `/admin/competitions/${competitionId}/court-allocation?divisionId=${divisionId}`
+    );
+
+    return;
   }
 
   // ==================================================
+  // COURT ALLOCATION EXISTS FOR THIS DIVISION
+  // ==================================================
+
+  router.push(
+    `/admin/competitions/${competitionId}/divisions/${divisionId}/open-play`
+  );
+}
+
+
+// ==================================================
   // FORMAT DATE
   // ==================================================
 
@@ -934,7 +1003,9 @@ export default function CompetitionDetailsPage() {
 
                         {allocationLoading
                           ? "Checking Courts..."
-                          : hasCourtAllocation
+                          : divisionCourtAllocation[
+                              division.id
+                            ]
                           ? "Manage Open Play"
                           : "Allocate Courts"}
 

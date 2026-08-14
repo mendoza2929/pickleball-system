@@ -52,14 +52,17 @@ type Competition = {
 // =====================================================
 // IMPORTANT
 //
-// checked_in_players is the number that actually
-// consumes the division capacity.
+// confirmed_players is the number that consumes
+// the division registration capacity.
 //
 // pending registration       = does NOT count
-// confirmed registration     = does NOT count
-// checked_in                 = COUNTS
+// confirmed registration     = COUNTS
+// checked_in                 = remains separate
 // no_show                    = does NOT count
 // cancelled                  = does NOT count
+//
+// checked_in_players is tracked separately for
+// attendance/check-in statistics.
 // =====================================================
 
 type Division = {
@@ -80,6 +83,10 @@ type Division = {
 
   max_players: number | null;
 
+  // Confirmed registrations consume division capacity.
+  confirmed_players: number;
+
+  // Check-in is tracked separately from capacity.
   checked_in_players: number;
 
   remaining_slots: number | null;
@@ -382,7 +389,7 @@ export default function RegisterPage() {
         // ONLY SHOW DIVISIONS THAT HAVE SLOTS
         //
         // remaining_slots comes from backend
-        // based on checked-in players.
+        // based on CONFIRMED registrations.
         // ---------------------------------------------
 
         const available =
@@ -652,8 +659,8 @@ export default function RegisterPage() {
   //
   // Used before final registration.
   //
-  // This protects against another player checking in
-  // while this page is open.
+  // This protects against another player confirming
+  // a registration while this page is open.
   // =====================================================
 
   async function refreshDivisionCapacity() {
@@ -1857,8 +1864,8 @@ export default function RegisterPage() {
                       value={
                         selectedDivision.max_players ===
                         null
-                          ? `${selectedDivision.checked_in_players} players`
-                          : `${selectedDivision.checked_in_players} / ${selectedDivision.max_players}`
+                          ? `${selectedDivision.confirmed_players} confirmed`
+                          : `${selectedDivision.confirmed_players} / ${selectedDivision.max_players}`
                       }
                     />
 
@@ -1950,7 +1957,7 @@ export default function RegisterPage() {
                                 ? Math.min(
                                     100,
                                     (
-                                      selectedDivision.checked_in_players /
+                                      selectedDivision.confirmed_players /
                                       selectedDivision.max_players
                                     ) *
                                       100
@@ -1970,14 +1977,13 @@ export default function RegisterPage() {
                         "
                       >
                         {
-                          selectedDivision.checked_in_players
+                          selectedDivision.confirmed_players
                         }{" "}
                         of{" "}
                         {
                           selectedDivision.max_players
                         }{" "}
-                        slots occupied by
-                        checked-in players.
+                        slots occupied by confirmed registrations.
                       </p>
 
                     </div>
@@ -2896,13 +2902,13 @@ export default function RegisterPage() {
                         "
                       >
                         {
-                          selectedDivision.checked_in_players
+                          selectedDivision.confirmed_players
                         }{" "}
                         /{" "}
                         {
                           selectedDivision.max_players
                         }{" "}
-                        checked in ·{" "}
+                        confirmed ·{" "}
                         {
                           selectedDivision.remaining_slots
                         }{" "}
