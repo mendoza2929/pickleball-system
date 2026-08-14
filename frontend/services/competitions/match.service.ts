@@ -169,4 +169,4 @@ export const matchService = {
 
     return response.data.data;
   },
-};createMatchFromQueue
+};
